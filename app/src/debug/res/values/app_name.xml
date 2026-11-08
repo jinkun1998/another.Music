@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">mochy Debug</string>
+    <!-- ponytail: debug suffix display name -->
+    <string name="app_name">another.Music Debug</string>
 </resources>
