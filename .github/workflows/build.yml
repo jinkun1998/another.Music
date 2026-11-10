@@ -1,4 +1,4 @@
-name: CI & Debug Build
+name: CI & Release Build
 
 on:
   workflow_dispatch:
@@ -13,10 +13,12 @@ on:
     branches: [ '**' ]
 
 jobs:
-  build_debug:
-    name: Build Universal GMS Debug
+  build:
+    name: Build Universal GMS Release
     runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]'
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v5
 
@@ -34,7 +36,7 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Generate debug.keystore
+      - name: Generate keystore
         run: |
           mkdir -p ~/.android
           keytool -genkey -v \
@@ -45,9 +47,9 @@ jobs:
             -keyalg RSA \
             -keysize 2048 \
             -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US"
+            -dname "CN=Android Release,O=anotherMusic,C=US"
 
-      - name: Build Debug APK
+      - name: Build Release APK
         env:
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SECRET: ${{ secrets.LASTFM_SECRET }}
@@ -55,12 +57,30 @@ jobs:
           LIBREFM_SECRET: ${{ secrets.LIBREFM_SECRET }}
           DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
         run: |
-          ./gradlew assembleUniversalGmsDebug --no-configuration-cache --console=plain --warning-mode summary
+          ./gradlew assembleUniversalGmsRelease --no-configuration-cache --console=plain --warning-mode summary
 
-      - name: Upload Debug APK
+      - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-universal-gms-debug
-          path: app/build/outputs/apk/universalGms/debug/*.apk
-          # a debug apk is only for trying the build, after a week it's just eating actions storage
-          retention-days: 7
+          name: app-universal-gms-release
+          path: app/build/outputs/apk/universalGms/release/*.apk
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        if: github.repository == 'jinkun1998/another.Music' && (github.ref == 'refs/heads/android/upstream-foldable' || github.event_name == 'workflow_dispatch')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          APK=$(ls app/build/outputs/apk/universalGms/release/*.apk | head -n 1)
+          TAG="v8.3.2-foldable"
+          gh release delete "$TAG" --yes --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          git tag -d "$TAG" 2>/dev/null || true
+          git push origin ":refs/tags/$TAG" 2>/dev/null || true
+          gh release create "$TAG" "$APK" \
+            --title "anotherMusic Android v8.3.2 (Foldable + Upstream)" \
+            --notes "Release APK for Android (Universal GMS):
+          - Upstream sync: includes all latest Mochy-Music features (Bluetooth auto-resume, search history toggle, custom folder storage, radio continuity).
+          - Foldable/Tablet optimizations: bounded covers, adaptive 2-column search, clamped controls.
+          - Full release optimizations (R8 minification, resource shrinking)." \
+            --repo "$GITHUB_REPOSITORY" \
+            --latest
