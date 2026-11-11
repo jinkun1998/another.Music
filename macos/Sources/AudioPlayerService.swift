@@ -166,6 +166,7 @@ public final class AudioPlayerService: ObservableObject {
     public func play(song: SongItem, newQueue: [SongItem] = []) {
         guard song.kind == .song else { return }
         cancelCrossmix()
+        player?.pause()
 
         if !newQueue.isEmpty {
             let songs = newQueue.filter { $0.kind == .song }

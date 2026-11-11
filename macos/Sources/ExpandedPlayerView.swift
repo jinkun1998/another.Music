@@ -69,47 +69,43 @@ import AppKit
             VStack(spacing: 0) {
                 // Top header bar (inset from left traffic lights so macOS window buttons never overlap)
                 HStack(spacing: 12) {
-                    Button(action: onClose) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 13, weight: .bold))
-                            Text("Hide")
-                                .font(.system(size: 12, weight: .semibold))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(Color.white.opacity(0.12))
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(Color.white.opacity(0.16), lineWidth: 1))
-                        .contentShape(Capsule())
+                    HStack(spacing: 6) {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 13, weight: .bold))
+                        Text("Hide")
+                            .font(.system(size: 12, weight: .semibold))
                     }
-                    .buttonStyle(.plain)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color.white.opacity(0.12))
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color.white.opacity(0.16), lineWidth: 1))
+                    .contentShape(Capsule())
+                    .onTapGesture { onClose() }
                     .keyboardShortcut(.escape, modifiers: [])
 
                     Spacer()
 
                     // Cover mode / Vinyl mode switcher
-                    Button(action: {
+                    HStack(spacing: 6) {
+                        Image(systemName: useVinyl ? "record.circle" : "square.stack.fill")
+                            .font(.system(size: 13))
+                        Text(useVinyl ? "Vinyl" : "Cover")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(Color.white.opacity(0.10))
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                    .contentShape(Capsule())
+                    .onTapGesture {
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                             useVinyl.toggle()
                         }
-                    }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: useVinyl ? "record.circle" : "square.stack.fill")
-                                .font(.system(size: 13))
-                            Text(useVinyl ? "Vinyl" : "Cover")
-                                .font(.system(size: 12, weight: .semibold))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .background(Color.white.opacity(0.10))
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 1))
-                        .contentShape(Capsule())
                     }
-                    .buttonStyle(.plain)
 
                     // Transition Mode Selector (AutoMix, Crossfade, Off)
                     Menu {
@@ -337,13 +333,12 @@ import AppKit
                             Spacer()
 
                             let targetTrack = (player.isTransitioning && player.uiTransitionProgress >= 0.5) ? (player.incomingTrack ?? activeTrack) : activeTrack
-                            Button(action: { library.toggleLike(targetTrack) }) {
-                                Image(systemName: library.isLiked(targetTrack) ? "heart.fill" : "heart")
-                                    .font(.system(size: 20))
-                                    .foregroundColor(library.isLiked(targetTrack) ? .white : .white.opacity(0.7))
-                                    .frame(width: 36, height: 36)
-                            }
-                            .buttonStyle(.plain)
+                            Image(systemName: library.isLiked(targetTrack) ? "heart.fill" : "heart")
+                                .font(.system(size: 20))
+                                .foregroundColor(library.isLiked(targetTrack) ? .white : .white.opacity(0.7))
+                                .frame(width: 36, height: 36)
+                                .contentShape(Rectangle())
+                                .onTapGesture { library.toggleLike(targetTrack) }
                         }
                         .frame(width: deckW)
                         .padding(.top, 4)
@@ -397,49 +392,51 @@ import AppKit
                             }
                         }
                         .frame(width: deckW)
+                        .onChange(of: player.positionSec) { _, _ in
+                            if isSeeking { isSeeking = false }
+                        }
 
                         // Transport Controls directly below Turntable
                         HStack(spacing: 24) {
-                            Button(action: { player.toggleShuffle() }) {
-                                Image(systemName: "shuffle")
-                                    .font(.system(size: 16, weight: player.isShuffle ? .bold : .regular))
-                                    .foregroundColor(player.isShuffle ? .white : .white.opacity(0.6))
-                            }
-                            .buttonStyle(.plain)
+                            Image(systemName: "shuffle")
+                                .font(.system(size: 16, weight: player.isShuffle ? .bold : .regular))
+                                .foregroundColor(player.isShuffle ? .white : .white.opacity(0.6))
+                                .frame(width: 36, height: 36)
+                                .contentShape(Rectangle())
+                                .onTapGesture { player.toggleShuffle() }
 
-                            Button(action: { player.previous() }) {
-                                Image(systemName: "backward.fill")
-                                    .font(.system(size: 22))
+                            Image(systemName: "backward.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor(.white)
+                                .frame(width: 36, height: 36)
+                                .contentShape(Rectangle())
+                                .onTapGesture { player.previous() }
+
+                            ZStack {
+                                Circle()
+                                    .fill(Color.white.opacity(0.14))
+                                    .frame(width: 56, height: 56)
+
+                                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                                    .font(.system(size: 24, weight: .bold))
                                     .foregroundColor(.white)
                             }
-                            .buttonStyle(.plain)
+                            .contentShape(Circle())
+                            .onTapGesture { player.togglePlayPause() }
 
-                            Button(action: { player.togglePlayPause() }) {
-                                ZStack {
-                                    Circle()
-                                        .fill(Color.white.opacity(0.14))
-                                        .frame(width: 56, height: 56)
+                            Image(systemName: "forward.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor(.white)
+                                .frame(width: 36, height: 36)
+                                .contentShape(Rectangle())
+                                .onTapGesture { player.next() }
 
-                                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                                        .font(.system(size: 24, weight: .bold))
-                                        .foregroundColor(.white)
-                                }
-                            }
-                            .buttonStyle(.plain)
-
-                            Button(action: { player.next() }) {
-                                Image(systemName: "forward.fill")
-                                    .font(.system(size: 22))
-                                    .foregroundColor(.white)
-                            }
-                            .buttonStyle(.plain)
-
-                            Button(action: { player.cycleRepeatMode() }) {
-                                Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
-                                    .font(.system(size: 16, weight: player.repeatMode != .off ? .bold : .regular))
-                                    .foregroundColor(player.repeatMode != .off ? .white : .white.opacity(0.6))
-                            }
-                            .buttonStyle(.plain)
+                            Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
+                                .font(.system(size: 16, weight: player.repeatMode != .off ? .bold : .regular))
+                                .foregroundColor(player.repeatMode != .off ? .white : .white.opacity(0.6))
+                                .frame(width: 36, height: 36)
+                                .contentShape(Rectangle())
+                                .onTapGesture { player.cycleRepeatMode() }
                         }
                         .frame(width: deckW)
 
@@ -472,8 +469,6 @@ import AppKit
                     .frame(width: geo.size.width, height: geo.size.height)
                     }
                     .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
-                    .gesture(dismissDragGesture)
 
                     // Right Column: Synced Lyrics panel OR Queue Drawer
                     ZStack {
