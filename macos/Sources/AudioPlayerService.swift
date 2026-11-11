@@ -94,6 +94,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
     private var crossmixDurationTarget: Double = 0
     private var crossmixPreloaded: (song: SongItem, item: AVPlayerItem, durSec: Double)?
 
+    private var pauseFadeTask: Task<Void, Never>?
     private var radioTask: Task<Void, Never>?
     private var artwork: MPMediaItemArtwork?
     private var artworkId: String?
@@ -166,6 +167,10 @@ public final class AudioPlayerService: NSObject, ObservableObject {
     public func play(song: SongItem, newQueue: [SongItem] = [], resumeAt: Double? = nil) {
         guard song.kind == .song else { return }
         cancelCrossmix()
+        pauseFadeTask?.cancel()
+        pauseFadeTask = nil
+        player?.volume = self.volume
+        secondaryPlayer?.volume = self.volume
         if let p = player {
             p.pause()
             if let token = timeObserverToken { p.removeTimeObserver(token); timeObserverToken = nil }
@@ -382,6 +387,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         item.audioTimePitchAlgorithm = .timeDomain
 
         let newPlayer = AVPlayer(playerItem: item)
+        newPlayer.automaticallyWaitsToMinimizeStalling = false
         newPlayer.volume = self.volume
 
         self.player = newPlayer
@@ -391,10 +397,10 @@ public final class AudioPlayerService: NSObject, ObservableObject {
             let tol = CMTime(seconds: 0.5, preferredTimescale: 600)
             let cmTime = CMTime(seconds: self.positionSec, preferredTimescale: 600)
             newPlayer.seek(to: cmTime, toleranceBefore: tol, toleranceAfter: tol) { _ in
-                newPlayer.play()
+                newPlayer.playImmediately(atRate: 1.0)
             }
         } else {
-            newPlayer.play()
+            newPlayer.playImmediately(atRate: 1.0)
         }
         self.isPlaying = true
         updateNowPlaying()
@@ -542,6 +548,8 @@ public final class AudioPlayerService: NSObject, ObservableObject {
     }
 
     private func cancelCrossmix() {
+        pauseFadeTask?.cancel()
+        pauseFadeTask = nil
         crossmixTimer?.invalidate()
         crossmixTimer = nil
         crossmixPreloaded = nil
@@ -732,10 +740,33 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         }
 
         if isPlaying {
-            p.pause()
-            secondaryPlayer?.pause()
             isPlaying = false
+            updateNowPlaying()
+            pauseFadeTask?.cancel()
+            let originalVol = self.volume
+            pauseFadeTask = Task { @MainActor [weak self] in
+                guard let self else { return }
+                let steps = 16
+                let intervalNs: UInt64 = 25_000_000 // 25ms * 16 = 400ms natural acoustic fade
+                for step in 1...steps {
+                    try? await Task.sleep(nanoseconds: intervalNs)
+                    guard !Task.isCancelled, !self.isPlaying else { return }
+                    let frac = 1.0 - (Double(step) / Double(steps))
+                    let curve = frac * frac
+                    self.player?.volume = Float(curve) * originalVol
+                    self.secondaryPlayer?.volume = Float(curve) * originalVol
+                }
+                guard !Task.isCancelled, !self.isPlaying else { return }
+                self.player?.pause()
+                self.secondaryPlayer?.pause()
+                self.player?.volume = originalVol
+                self.secondaryPlayer?.volume = originalVol
+            }
         } else {
+            pauseFadeTask?.cancel()
+            pauseFadeTask = nil
+            player?.volume = self.volume
+            secondaryPlayer?.volume = self.volume
             if durationSec > 0 && positionSec >= durationSec - 1.0 {
                 next(autoAdvance: true)
                 return
@@ -751,8 +782,8 @@ public final class AudioPlayerService: NSObject, ObservableObject {
                 secondaryPlayer?.play()
             }
             isPlaying = true
+            updateNowPlaying()
         }
-        updateNowPlaying()
     }
 
     public func seek(to fraction: Double) {

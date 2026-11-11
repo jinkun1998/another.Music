@@ -21,8 +21,8 @@ import SwiftUI
     private let vinylBlack = Color(red: 9/255, green: 9/255, blue: 10/255)
     private let trackGaps: [CGFloat] = [0.665, 0.745, 0.83, 0.905]
 
-    private let armRestDegrees: Double = 78.0
-    private let armLeadInDegrees: Double = 90.5
+    private let armRestDegrees: Double = 80.5
+    private let armLeadInDegrees: Double = 92.5
     private let armRunOutDegrees: Double = 112.0
 
     public init(thumbnail: String?, title: String, isPlaying: Bool, progress: Double, incomingThumbnail: String? = nil, incomingTitle: String? = nil, transitionProgress: Double = 0.0, onSeek: ((Double) -> Void)? = nil) {
@@ -51,13 +51,17 @@ import SwiftUI
     public var body: some View {
         GeometryReader { proxy in
             let side = min(proxy.size.width, proxy.size.height)
-            let center = CGPoint(x: side / 2, y: side / 2)
-            let radius = side / 2
+            let center = CGPoint(x: side * 0.44, y: side * 0.50)
+            let radius = side * 0.41
+
+            let pivot = CGPoint(x: side * 0.84, y: side * 0.14)
+            let u = side * 0.54
+            let targetDeg = armDeg
 
             ZStack {
-                // Base deck slab under arm pivot
+                // Base deck slab under arm pivot and arm cradle
                 Canvas { ctx, size in
-                    drawArmBase(ctx: ctx, u: size.width)
+                    drawArmBase(ctx: ctx, side: size.width)
                 }
 
                 // Platter drop shadow
@@ -73,10 +77,11 @@ import SwiftUI
                             endRadius: radius * 1.08
                         )
                     )
-                    .offset(y: radius * 0.035)
+                    .frame(width: radius * 2.1, height: radius * 2.1)
+                    .position(x: center.x, y: center.y + radius * 0.035)
 
                 // Stationary Platter with Sheen Reflections and Grooves
-                Canvas { ctx, size in
+                Canvas { ctx, _ in
                     drawPlatter(ctx: ctx, center: center, radius: radius)
                 }
 
@@ -86,7 +91,7 @@ import SwiftUI
                     let angle = (baseAngle + elapsed * spinDegreesPerSecond).truncatingRemainder(dividingBy: 360.0)
 
                     ZStack {
-                        let labelSize = side * 0.44
+                        let labelSize = radius * 0.88
 
                         ZStack {
                             if let thumbnail {
@@ -158,13 +163,10 @@ import SwiftUI
                         }
                         .rotationEffect(.degrees(angle))
                     }
+                    .position(center)
                 }
 
-                // Brushed Aluminium Tonearm
-                let targetDeg = armDeg
-                let pivot = CGPoint(x: side * 0.88, y: side * 0.12)
-                let u = side * 0.62
-
+                // Brushed Aluminium Tonearm with Cartridge and Arm Cradle
                 Canvas { ctx, _ in
                     // Arm shadow
                     drawTonearm(
@@ -183,7 +185,7 @@ import SwiftUI
                         isShadow: false
                     )
                 }
-                .animation(dragActive ? nil : .spring(response: 0.55, dampingFraction: 0.82), value: targetDeg)
+                .animation(dragActive ? nil : .spring(response: 0.72, dampingFraction: 0.84), value: targetDeg)
             }
             .frame(width: side, height: side)
             .contentShape(Rectangle())
@@ -191,13 +193,11 @@ import SwiftUI
                 DragGesture(minimumDistance: 0)
                     .onChanged { v in
                         guard onSeek != nil else { return }
-                        let pivot = CGPoint(x: side * 0.88, y: side * 0.12)
                         if !dragActive {
-                            // grab only near the needle tip
                             let rad = armDeg * .pi / 180
-                            let len = side * 0.62 * 0.876
+                            let len = u * 0.876
                             let tip = CGPoint(x: pivot.x + len * cos(rad), y: pivot.y + len * sin(rad))
-                            guard hypot(v.startLocation.x - tip.x, v.startLocation.y - tip.y) < side * 0.14 else { return }
+                            guard hypot(v.startLocation.x - tip.x, v.startLocation.y - tip.y) < side * 0.16 else { return }
                             dragActive = true
                         }
                         let deg = atan2(v.location.y - pivot.y, v.location.x - pivot.x) * 180 / .pi
@@ -228,35 +228,65 @@ import SwiftUI
         }
     }
 
-    private func drawArmBase(ctx: GraphicsContext, u: CGFloat) {
-        let left = (0.885 - 0.11) * u
-        let top = 0.02 * u
-        let width = 0.22 * u
-        let height = 0.40 * u
+    private func drawArmBase(ctx: GraphicsContext, side: CGFloat) {
+        let left = side * 0.76
+        let top = side * 0.04
+        let width = side * 0.18
+        let height = side * 0.46
+        let round = side * 0.08
         let rect = CGRect(x: left, y: top, width: width, height: height)
-        let path = Path(roundedRect: rect, cornerRadius: 0.11 * u)
+        let path = Path(roundedRect: rect, cornerRadius: round)
 
         for i in 1...4 {
-            let grow = u * 0.007 * CGFloat(i)
-            let shadowRect = rect.insetBy(dx: -grow, dy: -grow).offsetBy(dx: u * 0.008, dy: u * 0.018)
-            ctx.fill(Path(roundedRect: shadowRect, cornerRadius: (0.11 * u) + grow), with: .color(.black.opacity(0.07)))
+            let grow = side * 0.007 * CGFloat(i)
+            let shadowRect = rect.insetBy(dx: -grow, dy: -grow).offsetBy(dx: side * 0.006, dy: side * 0.014)
+            ctx.fill(Path(roundedRect: shadowRect, cornerRadius: round + grow), with: .color(.black.opacity(0.08)))
         }
 
+        // Deck plate
         ctx.fill(path, with: .linearGradient(
-            Gradient(colors: [Color(white: 0.10), Color(white: 0.06), Color(white: 0.04)]),
+            Gradient(colors: [Color(white: 0.13), Color(white: 0.08), Color(white: 0.05)]),
             startPoint: CGPoint(x: left, y: top),
             endPoint: CGPoint(x: left + width, y: top + height)
         ))
 
         ctx.stroke(path, with: .linearGradient(
             Gradient(stops: [
-                .init(color: .white.opacity(0.12), location: 0),
-                .init(color: .white.opacity(0.02), location: 0.4),
+                .init(color: .white.opacity(0.18), location: 0),
+                .init(color: .white.opacity(0.04), location: 0.4),
                 .init(color: .clear, location: 1)
             ]),
             startPoint: CGPoint(x: left, y: top),
             endPoint: CGPoint(x: left + width, y: top + height * 0.6)
         ), lineWidth: 1)
+
+        // Pivot Gimbal Ring
+        let pX = side * 0.84
+        let pY = side * 0.14
+        let ringR = side * 0.045
+        let ringRect = CGRect(x: pX - ringR, y: pY - ringR, width: ringR * 2, height: ringR * 2)
+        ctx.fill(Path(ellipseIn: ringRect), with: .linearGradient(
+            Gradient(colors: [Color(white: 0.28), Color(white: 0.15), Color(white: 0.08)]),
+            startPoint: CGPoint(x: ringRect.minX, y: ringRect.minY),
+            endPoint: CGPoint(x: ringRect.maxX, y: ringRect.maxY)
+        ))
+        ctx.stroke(Path(ellipseIn: ringRect), with: .color(.white.opacity(0.20)), lineWidth: 1)
+
+        // Arm Rest Cradle Stand (Holds tonearm when parked outside record)
+        let cradleX = side * 0.865
+        let cradleY = side * 0.38
+        let postR = side * 0.016
+        let postRect = CGRect(x: cradleX - postR, y: cradleY - postR, width: postR * 2, height: postR * 2)
+        ctx.fill(Path(ellipseIn: postRect), with: .color(Color(white: 0.25)))
+        ctx.stroke(Path(ellipseIn: postRect), with: .color(.white.opacity(0.25)), lineWidth: 1)
+
+        // U-shaped rest cradle
+        var uPath = Path()
+        uPath.move(to: CGPoint(x: cradleX - postR * 1.5, y: cradleY - postR * 0.8))
+        uPath.addLine(to: CGPoint(x: cradleX - postR * 1.5, y: cradleY + postR * 0.5))
+        uPath.addQuadCurve(to: CGPoint(x: cradleX + postR * 1.5, y: cradleY + postR * 0.5), control: CGPoint(x: cradleX, y: cradleY + postR * 1.4))
+        uPath.addLine(to: CGPoint(x: cradleX + postR * 1.5, y: cradleY - postR * 0.8))
+        ctx.stroke(uPath, with: .color(Color(white: 0.65)), style: StrokeStyle(lineWidth: side * 0.005, lineCap: .round))
     }
 
     private func drawPlatter(ctx: GraphicsContext, center: CGPoint, radius: CGFloat) {
@@ -306,7 +336,7 @@ import SwiftUI
         let tubeTo = armLen - (0.05 * u)
         let tubeHalf = 0.0145 * u
 
-        // Tube
+        // Arm Tube
         let tubePath = Path(CGRect(x: tubeFrom, y: -tubeHalf, width: tubeTo - tubeFrom, height: tubeHalf * 2))
         if isShadow {
             copy.fill(tubePath, with: .color(.black.opacity(0.4)))
@@ -346,17 +376,46 @@ import SwiftUI
 
         let shellRect = CGRect(x: -0.014 * u, y: -0.032 * u, width: 0.145 * u, height: 0.064 * u)
         let shellPath = Path(roundedRect: shellRect, cornerRadius: 0.009 * u)
+
+        // Cartridge body underneath headshell
+        let cartRect = CGRect(x: 0.025 * u, y: -0.020 * u, width: 0.095 * u, height: 0.040 * u)
+        let cartPath = Path(roundedRect: cartRect, cornerRadius: 0.004 * u)
+
         if isShadow {
             headCtx.fill(shellPath, with: .color(.black.opacity(0.5)))
+            headCtx.fill(cartPath, with: .color(.black.opacity(0.4)))
         } else {
-            headCtx.fill(shellPath, with: .color(Color(white: 0.18)))
-            headCtx.stroke(shellPath, with: .color(.white.opacity(0.15)), lineWidth: 1)
+            // Headshell metal body
+            headCtx.fill(shellPath, with: .linearGradient(
+                Gradient(colors: [Color(white: 0.22), Color(white: 0.14), Color(white: 0.09)]),
+                startPoint: CGPoint(x: -0.014 * u, y: -0.032 * u),
+                endPoint: CGPoint(x: 0.131 * u, y: 0.032 * u)
+            ))
+            headCtx.stroke(shellPath, with: .color(.white.opacity(0.18)), lineWidth: 1)
+
+            // Premium crimson red cartridge body
+            headCtx.fill(cartPath, with: .linearGradient(
+                Gradient(colors: [Color(red: 0.85, green: 0.18, blue: 0.22), Color(red: 0.55, green: 0.10, blue: 0.12)]),
+                startPoint: CGPoint(x: 0.025 * u, y: -0.020 * u),
+                endPoint: CGPoint(x: 0.120 * u, y: 0.020 * u)
+            ))
+            headCtx.stroke(cartPath, with: .color(Color.black.opacity(0.35)), lineWidth: 0.5)
+
+            // Stylus Cantilever
+            var needlePath = Path()
+            needlePath.move(to: CGPoint(x: 0.110 * u, y: 0.0))
+            needlePath.addLine(to: CGPoint(x: 0.128 * u, y: 0.002 * u))
+            headCtx.stroke(needlePath, with: .color(Color(white: 0.85)), style: StrokeStyle(lineWidth: 0.006 * u, lineCap: .round))
+
+            // Diamond tip dot
+            let tipDot = CGRect(x: 0.126 * u, y: -0.003 * u, width: 0.006 * u, height: 0.006 * u)
+            headCtx.fill(Path(ellipseIn: tipDot), with: .color(.white))
 
             // Finger lift
             var liftPath = Path()
             liftPath.move(to: CGPoint(x: 0.112 * u, y: -0.024 * u))
             liftPath.addLine(to: CGPoint(x: 0.127 * u, y: -0.067 * u))
-            headCtx.stroke(liftPath, with: .color(Color(white: 0.65)), style: StrokeStyle(lineWidth: 0.0105 * u, lineCap: .round))
+            headCtx.stroke(liftPath, with: .color(Color(white: 0.70)), style: StrokeStyle(lineWidth: 0.0105 * u, lineCap: .round))
         }
     }
 }
