@@ -230,9 +230,6 @@ public final class AudioPlayerService: NSObject, ObservableObject {
 
             if stream.durationMs > 0 {
                 self.durationSec = Double(stream.durationMs) / 1000.0
-                if let curItem = self.player?.currentItem {
-                    curItem.forwardPlaybackEndTime = CMTime(seconds: self.durationSec, preferredTimescale: 600)
-                }
             }
 
             guard let url = URL(string: stream.url) else { return }
@@ -385,10 +382,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
         let item = AVPlayerItem(asset: asset)
         item.audioTimePitchAlgorithm = .timeDomain
-        if self.durationSec > 0 {
-            // ponytail: clamp playback to exact YouTube track duration; prevents fMP4 2x moov+sidx duration bug from playing past track end
-            item.forwardPlaybackEndTime = CMTime(seconds: self.durationSec, preferredTimescale: 600)
-        }
+
         let newPlayer = AVPlayer(playerItem: item)
         newPlayer.volume = self.volume
 
@@ -419,6 +413,12 @@ public final class AudioPlayerService: NSObject, ObservableObject {
                         self.positionSec = min(current, self.durationSec)
                         self.progress = min(max(current / self.durationSec, 0.0), 1.0)
 
+                        // Natural track end guard without forwardPlaybackEndTime stall
+                        if current >= self.durationSec - 0.25 {
+                            self.advanceOnce(itemId)
+                            return
+                        }
+
                         // 1. Always ensure upcoming song is preloaded ahead of time
                         if current >= self.durationSec - 14.0 || self.preloadedTrack == nil {
                             self.maybePreloadNextTrack()
@@ -426,7 +426,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
 
                         // 2. Dual-Deck Equal-Power AutoMix Trigger
                         if self.shouldCrossfade, !self.isTransitioning, current >= (self.durationSec - self.crossmixDuration) {
-                            if let pre = self.preloadedTrack {
+                            if let pre = self.crossmixPreloaded ?? self.preloadedTrack {
                                 let remaining = max(1.5, self.durationSec - current)
                                 let effective = min(self.crossmixDuration, remaining)
                                 self.startCrossmix(to: pre, duration: effective)
@@ -456,11 +456,11 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                if self.isTransitioning, let pre = self.preloadedTrack {
-                    // Outgoing track finished playing during crossmix; immediately finish handoff without dropping audio
+                if self.isTransitioning, let pre = self.crossmixPreloaded ?? self.preloadedTrack {
                     self.crossmixTimer?.invalidate()
                     self.crossmixTimer = nil
-                    self.finishCrossmix(to: pre, overlapSec: self.crossmixDuration)
+                    let dur = self.crossmixDurationTarget > 0 ? self.crossmixDurationTarget : self.crossmixDuration
+                    self.finishCrossmix(to: pre, overlapSec: dur)
                 } else {
                     self.advanceOnce(itemId)
                 }
@@ -522,9 +522,6 @@ public final class AudioPlayerService: NSObject, ObservableObject {
             let item = AVPlayerItem(asset: asset)
             item.audioTimePitchAlgorithm = .timeDomain
             let dur = stream.durationMs > 0 ? (Double(stream.durationMs) / 1000.0) : Double(nextSong.duration ?? 0)
-            if dur > 0 {
-                item.forwardPlaybackEndTime = CMTime(seconds: dur, preferredTimescale: 600)
-            }
             let sec = AVPlayer(playerItem: item)
             sec.automaticallyWaitsToMinimizeStalling = false
             sec.volume = 0
@@ -738,6 +735,10 @@ public final class AudioPlayerService: NSObject, ObservableObject {
             secondaryPlayer?.pause()
             isPlaying = false
         } else {
+            if durationSec > 0 && positionSec >= durationSec - 1.0 {
+                next(autoAdvance: true)
+                return
+            }
             let cur = p.currentTime().seconds
             if positionSec > 0 && cur.isFinite && abs(cur - positionSec) > 1.0 {
                 let tol = CMTime(seconds: 0.5, preferredTimescale: 600)
@@ -755,17 +756,18 @@ public final class AudioPlayerService: NSObject, ObservableObject {
 
     public func seek(to fraction: Double) {
         cancelCrossmix()
+        advancedForItem = nil
         let clamped = min(max(fraction, 0.0), 1.0)
 
-        // Scrubbed to end of track (within 1.5s): cleanly advance to next song
-        if durationSec > 0 && ((1.0 - clamped) * durationSec <= 1.5 || clamped >= 0.995) {
+        // Scrubbed to end of track (within 2.5s or >= 0.985): cleanly advance to next song
+        if durationSec > 0 && ((1.0 - clamped) * durationSec <= 2.5 || clamped >= 0.985) {
             self.positionSec = durationSec
             self.progress = 1.0
             next(autoAdvance: true)
             return
         }
 
-        let targetSec = durationSec > 0 ? (clamped * durationSec) : 0
+        let targetSec = durationSec > 0 ? min(clamped * durationSec, max(0, durationSec - 2.0)) : 0
         self.positionSec = targetSec
         self.progress = clamped
 
