@@ -5,6 +5,15 @@ public struct TurntableCanvas: View {
     let title: String
     let isPlaying: Bool
     let progress: Double
+    var onSeek: ((Double) -> Void)? = nil
+
+    @State private var dragFraction: Double?
+    @State private var dragActive = false
+    @State private var baseAngle: Double = 0.0
+    @State private var playStartDate: Date? = nil
+
+    // ponytail: matches Android DiscCoverStack SpinDegreesPerSecond = 26f (13.85s per rev)
+    private let spinDegreesPerSecond: Double = 26.0
 
     private let vinylBlack = Color(red: 9/255, green: 9/255, blue: 10/255)
     private let trackGaps: [CGFloat] = [0.665, 0.745, 0.83, 0.905]
@@ -13,11 +22,18 @@ public struct TurntableCanvas: View {
     private let armLeadInDegrees: Double = 90.5
     private let armRunOutDegrees: Double = 112.0
 
-    public init(thumbnail: String?, title: String, isPlaying: Bool, progress: Double) {
+    public init(thumbnail: String?, title: String, isPlaying: Bool, progress: Double, onSeek: ((Double) -> Void)? = nil) {
+        self.onSeek = onSeek
         self.thumbnail = thumbnail
         self.title = title
         self.isPlaying = isPlaying
         self.progress = progress
+    }
+
+    private var armDeg: Double {
+        (isPlaying || dragFraction != nil)
+            ? armLeadInDegrees + (dragFraction ?? progress) * (armRunOutDegrees - armLeadInDegrees)
+            : armRestDegrees
     }
 
     public var body: some View {
@@ -52,9 +68,10 @@ public struct TurntableCanvas: View {
                     drawPlatter(ctx: ctx, center: center, radius: radius)
                 }
 
-                // Turning Center Label (Artwork) at 33 1/3 RPM
+                // Turning Center Label (Artwork) at 26 deg/sec matching Android DiscCoverStack
                 TimelineView(.animation(paused: !isPlaying)) { timeline in
-                    let angle = isPlaying ? timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.8) / 1.8 * 360.0 : 0.0
+                    let elapsed = (isPlaying && playStartDate != nil) ? max(0, timeline.date.timeIntervalSince(playStartDate!)) : 0
+                    let angle = (baseAngle + elapsed * spinDegreesPerSecond).truncatingRemainder(dividingBy: 360.0)
 
                     ZStack {
                         let labelSize = side * 0.44
@@ -116,7 +133,7 @@ public struct TurntableCanvas: View {
                 }
 
                 // Brushed Aluminium Tonearm
-                let targetDeg = isPlaying ? (armLeadInDegrees + progress * (armRunOutDegrees - armLeadInDegrees)) : armRestDegrees
+                let targetDeg = armDeg
                 let pivot = CGPoint(x: side * 0.88, y: side * 0.12)
                 let u = side * 0.62
 
@@ -138,10 +155,48 @@ public struct TurntableCanvas: View {
                         isShadow: false
                     )
                 }
-                .animation(.spring(response: 0.55, dampingFraction: 0.82), value: targetDeg)
+                .animation(dragActive ? nil : .spring(response: 0.55, dampingFraction: 0.82), value: targetDeg)
             }
             .frame(width: side, height: side)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { v in
+                        guard onSeek != nil else { return }
+                        let pivot = CGPoint(x: side * 0.88, y: side * 0.12)
+                        if !dragActive {
+                            // grab only near the needle tip
+                            let rad = armDeg * .pi / 180
+                            let len = side * 0.62 * 0.876
+                            let tip = CGPoint(x: pivot.x + len * cos(rad), y: pivot.y + len * sin(rad))
+                            guard hypot(v.startLocation.x - tip.x, v.startLocation.y - tip.y) < side * 0.14 else { return }
+                            dragActive = true
+                        }
+                        let deg = atan2(v.location.y - pivot.y, v.location.x - pivot.x) * 180 / .pi
+                        dragFraction = min(max((deg - armLeadInDegrees) / (armRunOutDegrees - armLeadInDegrees), 0), 1)
+                    }
+                    .onEnded { _ in
+                        if dragActive, let f = dragFraction { onSeek?(f) }
+                        dragActive = false
+                        dragFraction = nil
+                    }
+            )
             .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+            .onAppear {
+                if isPlaying && playStartDate == nil {
+                    playStartDate = Date()
+                }
+            }
+            .onChange(of: isPlaying) { _, playing in
+                if playing {
+                    playStartDate = Date()
+                } else {
+                    if let start = playStartDate {
+                        baseAngle = (baseAngle + max(0, Date().timeIntervalSince(start)) * spinDegreesPerSecond).truncatingRemainder(dividingBy: 360.0)
+                    }
+                    playStartDate = nil
+                }
+            }
         }
     }
 

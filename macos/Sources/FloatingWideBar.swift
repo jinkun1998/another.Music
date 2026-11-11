@@ -19,7 +19,7 @@ public struct FloatingWideBar: View {
 
     public var body: some View {
         HStack(spacing: 0) {
-            // Left: Integrated Mini Player (only present when a track exists)
+            // Left: Integrated Mini Player (animated expand/collapse)
             if let track = currentTrack {
                 HStack(spacing: 12) {
                     HStack(spacing: 10) {
@@ -58,20 +58,22 @@ public struct FloatingWideBar: View {
                                 .font(.system(size: 13))
                                 .foregroundColor(.white.opacity(0.85))
                                 .frame(width: 32, height: 32)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
 
                         Button(action: onTogglePlay) {
                             ZStack {
                                 Circle()
-                                    .fill(Color(red: 1.0, green: 0.18, blue: 0.34))
+                                    .fill(Color.white.opacity(0.14))
                                     .frame(width: 36, height: 36)
-                                    .overlay(Circle().stroke(Color.white.opacity(0.4), lineWidth: 1))
+                                    .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
 
                                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                                     .font(.system(size: 14, weight: .bold))
                                     .foregroundColor(.white)
                             }
+                            .contentShape(Circle())
                         }
                         .buttonStyle(.plain)
 
@@ -80,6 +82,7 @@ public struct FloatingWideBar: View {
                                 .font(.system(size: 13))
                                 .foregroundColor(.white.opacity(0.85))
                                 .frame(width: 32, height: 32)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
@@ -90,10 +93,12 @@ public struct FloatingWideBar: View {
                         .frame(width: 1, height: 26)
                         .padding(.horizontal, 6)
                 }
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .scale(scale: 0.85)),
-                    removal: .opacity.combined(with: .scale(scale: 0.85))
-                ))
+                .transition(
+                    .asymmetric(
+                        insertion: .move(edge: .leading).combined(with: .opacity).combined(with: .scale(scale: 0.9, anchor: .leading)),
+                        removal: .move(edge: .leading).combined(with: .opacity).combined(with: .scale(scale: 0.9, anchor: .leading))
+                    )
+                )
             }
 
             // Right: 4 Navigation Tabs
@@ -117,6 +122,8 @@ public struct FloatingWideBar: View {
                                 .foregroundColor(isSelected ? .white : .white.opacity(0.55))
                                 .frame(width: 52, height: 42)
                         }
+                        .frame(width: 52, height: 42)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
@@ -125,7 +132,10 @@ public struct FloatingWideBar: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .fixedSize()
+        .contentShape(Capsule())
         .liquidGlass(cornerRadius: 32)
+        .animation(.spring(response: 0.45, dampingFraction: 0.82), value: currentTrack != nil)
+        .animation(.spring(response: 0.35, dampingFraction: 0.82), value: currentTrack?.id)
         .overlay(alignment: .bottom) {
             if currentTrack != nil {
                 GeometryReader { geo in
@@ -133,8 +143,8 @@ public struct FloatingWideBar: View {
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color(red: 1.0, green: 0.18, blue: 0.34),
-                                    Color(red: 1.0, green: 0.45, blue: 0.60)
+                                    Color.white.opacity(0.75),
+                                    Color.white.opacity(0.45)
                                 ],
                                 startPoint: .leading,
                                 endPoint: .trailing
@@ -146,6 +156,7 @@ public struct FloatingWideBar: View {
                 .clipShape(Capsule())
                 .padding(.horizontal, 18)
                 .padding(.bottom, 2)
+                .transition(.opacity)
             }
         }
     }

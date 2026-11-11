@@ -13,94 +13,121 @@ struct AnotherMusicApp: App {
                 .frame(minWidth: 1040, minHeight: 720)
         }
         .windowStyle(.hiddenTitleBar)
+        .commands {
+            CommandMenu("Playback") {
+                Button("Play/Pause") { player.togglePlayPause() }.keyboardShortcut("p", modifiers: .command)
+                Button("Seek Back 5s") { player.seekBy(seconds: -5) }.keyboardShortcut(.leftArrow, modifiers: .command)
+                Button("Seek Forward 5s") { player.seekBy(seconds: 5) }.keyboardShortcut(.rightArrow, modifiers: .command)
+                Button("Volume Up") { player.setVolume(player.volume + 0.1) }.keyboardShortcut(.upArrow, modifiers: .command)
+                Button("Volume Down") { player.setVolume(player.volume - 0.1) }.keyboardShortcut(.downArrow, modifiers: .command)
+                Button("Shuffle") { player.toggleShuffle() }.keyboardShortcut("s", modifiers: [.command, .shift])
+                Button("Repeat") { player.cycleRepeatMode() }.keyboardShortcut("r", modifiers: [.command, .shift])
+                Button("Search") { NotificationCenter.default.post(name: .gotoSearch, object: nil) }.keyboardShortcut("f", modifiers: .command)
+                Divider()
+                Menu("Sleep Timer") {
+                    ForEach(SleepTimerOption.allCases, id: \.self) { opt in
+                        Button(opt.rawValue) { player.setSleepTimer(opt) }
+                    }
+                }
+            }
+        }
+
+        Settings {
+            SettingsView()
+                .preferredColorScheme(.dark)
+        }
+
+        MenuBarExtra("anotherMusic", systemImage: player.isPlaying ? "play.circle.fill" : "music.note") {
+            MenuBarController(player: player)
+        }
+        .menuBarExtraStyle(.window)
     }
 }
+
+extension Notification.Name { static let gotoSearch = Notification.Name("gotoSearch") }
 
 struct MainContentView: View {
     @EnvironmentObject var player: AudioPlayerService
     @State private var selectedTab: String = "Home"
     @State private var isPlayerExpanded: Bool = false
+    @State private var collection: SongItem?
 
-    private let brandRed = Color(red: 1.0, green: 0.18, blue: 0.34)
+    private func handle(_ song: SongItem, _ queue: [SongItem]) {
+        if song.kind == .song {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                player.play(song: song, newQueue: queue)
+            }
+        } else {
+            collection = song
+        }
+    }
 
     var body: some View {
         ZStack {
-            // Main app dark background
-            Color(red: 0.04, green: 0.035, blue: 0.05)
+            // Base black surface matching Android MochyTheme
+            Color.black
                 .ignoresSafeArea()
 
-            // Dynamic Ambient Glow from Track Artwork
+            // Muted top wash matching Android HomeTopGlow (saturation <= 0.55, dim luminance)
             if let thumb = player.currentTrack?.thumbnail, let url = URL(string: thumb) {
-                AsyncImage(url: url) { phase in
-                    if let img = phase.image {
-                        img.resizable().aspectRatio(contentMode: .fill)
-                    } else {
-                        Color.clear
+                VStack {
+                    AsyncImage(url: url) { phase in
+                        if let img = phase.image {
+                            img.resizable().aspectRatio(contentMode: .fill)
+                        } else {
+                            Color.clear
+                        }
                     }
-                }
-                .frame(height: 480)
-                .blur(radius: 90)
-                .opacity(0.35)
-                .mask(
-                    LinearGradient(
-                        colors: [.black, .clear],
-                        startPoint: .top,
-                        endPoint: .bottom
+                    .frame(maxWidth: .infinity, maxHeight: 260)
+                    .saturation(0.50)
+                    .blur(radius: 90)
+                    .opacity(0.24)
+                    .mask(
+                        LinearGradient(
+                            colors: [.black, .black.opacity(0.55), .clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                     )
-                )
+                    Spacer()
+                }
                 .ignoresSafeArea()
+                .animation(.easeInOut(duration: 0.6), value: thumb)
             }
 
             // Main Content Area with Spring Recede Animation
             VStack(spacing: 0) {
-                // Top Brand Bar
-                HStack {
-                    HStack(spacing: 10) {
-                        Circle()
-                            .fill(brandRed)
-                            .frame(width: 28, height: 28)
-                            .overlay(
-                                Image(systemName: "play.fill")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .foregroundColor(.white)
-                            )
-                        Text("another.Music")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                    .padding(.horizontal, 8)
-                    .contentShape(Rectangle())
-                    .onTapGesture { selectedTab = "Home" }
-
-                    Spacer()
-                }
-                .padding(.leading, 84)
-                .padding(.trailing, 36)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
-
                 // Screen Switcher
                 ZStack {
                     switch selectedTab {
                     case "Home":
                         HomeScreen(onPlay: { song, queue in
-                            player.play(song: song, newQueue: queue)
+                            handle(song, queue)
                         })
                     case "Search":
                         SearchScreen(onPlay: { song, queue in
-                            player.play(song: song, newQueue: queue)
+                            handle(song, queue)
                         })
                     case "Library":
                         LibraryScreen(onPlay: { song, queue in
-                            player.play(song: song, newQueue: queue)
+                            handle(song, queue)
                         })
                     case "Account":
-                        AccountScreen()
+                        AccountScreen(onPlay: { song, queue in
+                            handle(song, queue)
+                        })
                     default:
                         EmptyView()
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onReceive(NotificationCenter.default.publisher(for: .gotoSearch)) { _ in selectedTab = "Search" }
+            }
+            .overlay {
+                if let c = collection {
+                    AlbumDetailView(item: c, onPlay: { s, q in player.play(song: s, newQueue: q) }, onClose: { collection = nil })
+                        .transition(.opacity)
+                }
             }
             .scaleEffect(isPlayerExpanded ? 0.94 : 1.0)
             .opacity(isPlayerExpanded ? 0.35 : 1.0)

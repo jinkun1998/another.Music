@@ -7,146 +7,82 @@ public struct HomeScreen: View {
     @State private var isLoading: Bool = true
 
     public var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            LazyVStack(alignment: .leading, spacing: 32) {
-                // Hero Banner
-                if let heroSection = sections.first, let heroSong = heroSection.items.first {
-                    HeroBanner(song: heroSong, onPlay: { onPlay(heroSong, heroSection.items) })
-                        .padding(.horizontal, 36)
-                        .padding(.top, 16)
-                }
-
-                // Each Section
-                ForEach(sections) { sec in
-                    VStack(alignment: .leading, spacing: 14) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(sec.title)
-                                .font(.system(size: 22, weight: .bold))
-                                .foregroundColor(.white)
-                            if let label = sec.label {
-                                Text(label.uppercased())
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(.white.opacity(0.5))
+        ZStack {
+            if isLoading && sections.isEmpty {
+                ProgressView()
+                    .scaleEffect(1.2)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(alignment: .leading, spacing: 28) {
+                        TimelineView(.everyMinute) { context in
+                            let hour = Calendar.current.component(.hour, from: context.date)
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text(timeGreeting(hour: hour))
+                                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                                    .tracking(-0.8)
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: [.white, Color.white.opacity(0.72)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
                             }
+                            .padding(.horizontal, 36)
                         }
-                        .padding(.horizontal, 36)
 
-                        // 4-row Quick Picks or Horizontal Scroll Shelf
-                        if sec.items.count >= 4 {
-                            QuickPicksGrid(items: sec.items, onPlay: { onPlay($0, sec.items) })
-                                .padding(.horizontal, 36)
-                        } else {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 16) {
-                                    ForEach(sec.items) { item in
-                                        SongCard(item: item, onPlay: { onPlay(item, sec.items) })
+                        ForEach(sections) { sec in
+                            VStack(alignment: .leading, spacing: 14) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    if let label = sec.label, !label.isEmpty {
+                                        Text(label.uppercased())
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .tracking(0.8)
+                                            .foregroundColor(.white.opacity(0.5))
                                     }
+                                    Text(sec.title)
+                                        .font(.system(size: 22, weight: .bold))
+                                        .foregroundColor(.white)
                                 }
                                 .padding(.horizontal, 36)
+
+                                if sec.isTrackGrid {
+                                    QuickPicksGrid(items: sec.items, onPlay: { onPlay($0, sec.items) })
+                                        .padding(.horizontal, 36)
+                                } else {
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        HStack(spacing: 16) {
+                                            ForEach(sec.items) { item in
+                                                SongCard(item: item, onPlay: { onPlay(item, sec.items) })
+                                            }
+                                        }
+                                        .padding(.horizontal, 36)
+                                    }
+                                }
                             }
                         }
-                    }
-                }
 
-                Color.clear.frame(height: 100)
+                        Color.clear.frame(height: 120)
+                    }
+                    .padding(.top, 38)
+                }
             }
         }
         .task {
-            let res = await InnerTubeService.shared.fetchHome()
+            let res = await InnerTubeService.shared.fetchHome(
+                history: LibraryStore.shared.history,
+                liked: LibraryStore.shared.likedSongs
+            )
             self.sections = res
             self.isLoading = false
-        }
-    }
-}
-
-private struct HeroBanner: View {
-    let song: SongItem
-    let onPlay: () -> Void
-
-    var body: some View {
-        ZStack {
-            // Ambient Artwork background
-            if let thumb = song.thumbnail, let url = URL(string: thumb) {
-                AsyncImage(url: url) { phase in
-                    if let img = phase.image {
-                        img.resizable().aspectRatio(contentMode: .fill)
-                    } else {
-                        Color(red: 0.1, green: 0.1, blue: 0.12)
-                    }
-                }
-                .blur(radius: 60)
-                .opacity(0.4)
-            }
-
-            // Dark gradient wash
-            LinearGradient(
-                colors: [
-                    Color(red: 0.05, green: 0.05, blue: 0.07).opacity(0.95),
-                    Color(red: 0.05, green: 0.05, blue: 0.07).opacity(0.50)
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-
-            HStack(spacing: 36) {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("RECOMMENDED")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(Color(red: 1.0, green: 0.28, blue: 0.45))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 4)
-                        .background(Color(red: 1.0, green: 0.18, blue: 0.34).opacity(0.2))
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(Color(red: 1.0, green: 0.18, blue: 0.34).opacity(0.4), lineWidth: 1))
-
-                    Text(song.title)
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(.white)
-                        .lineLimit(2)
-
-                    Text(song.artist)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white.opacity(0.7))
-                        .lineLimit(1)
-
-                    Button(action: onPlay) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 14, weight: .bold))
-                            Text("Play Now")
-                                .font(.system(size: 14, weight: .semibold))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 22)
-                        .padding(.vertical, 10)
-                        .background(Color(red: 1.0, green: 0.18, blue: 0.34))
-                        .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .shadow(color: Color(red: 1.0, green: 0.18, blue: 0.34).opacity(0.4), radius: 8)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                if let thumb = song.thumbnail, let url = URL(string: thumb) {
-                    AsyncImage(url: url) { phase in
-                        if let img = phase.image {
-                            img.resizable().aspectRatio(contentMode: .fill)
-                        } else {
-                            Color.gray.opacity(0.3)
-                        }
-                    }
-                    .frame(width: 200, height: 200)
-                    .clipShape(RoundedRectangle(cornerRadius: 18))
-                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color.white.opacity(0.15), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.3), radius: 16)
+            if AudioPlayerService.shared.currentTrack == nil,
+               let firstSong = res.first?.items.first(where: { $0.kind == .song }) {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
+                    AudioPlayerService.shared.prepare(song: firstSong, queue: res.first?.items ?? [firstSong])
                 }
             }
-            .padding(32)
         }
-        .frame(height: 280)
-        .background(Color(white: 0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 24))
-        .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.08), lineWidth: 1))
     }
 }
 

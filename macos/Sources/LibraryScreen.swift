@@ -3,17 +3,13 @@ import SwiftUI
 public struct LibraryScreen: View {
     let onPlay: (SongItem, [SongItem]) -> Void
 
-    @State private var selectedFilter = "Playlists"
-    private let filters = ["Playlists", "Songs", "Albums", "Artists"]
+    @ObservedObject private var library = LibraryStore.shared
+    @State private var selectedFilter = "Liked"
+    private let filters = ["Liked", "History"]
 
     public var body: some View {
+        let items = selectedFilter == "Liked" ? library.likedSongs : library.history
         VStack(alignment: .leading, spacing: 20) {
-            Text("Your Library")
-                .font(.system(size: 32, weight: .bold))
-                .foregroundColor(.white)
-                .padding(.horizontal, 36)
-                .padding(.top, 16)
-
             HStack(spacing: 10) {
                 ForEach(filters, id: \.self) { filter in
                     let isSel = filter == selectedFilter
@@ -30,23 +26,29 @@ public struct LibraryScreen: View {
                 }
             }
             .padding(.horizontal, 36)
+            .padding(.top, 38)
 
-            Spacer()
-
-            VStack(spacing: 12) {
+            if items.isEmpty {
+                Spacer()
                 Image(systemName: "books.vertical")
-                    .font(.system(size: 40))
-                    .foregroundColor(.white.opacity(0.3))
-                Text("No saved \(selectedFilter.lowercased()) yet")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                Text("Songs and playlists you play will appear here")
-                    .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.5))
+                    .font(.system(size: 36))
+                    .foregroundColor(.white.opacity(0.25))
+                    .frame(maxWidth: .infinity)
+                Spacer()
+            } else {
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 14)], spacing: 14) {
+                        ForEach(items) { s in
+                            TrackRow(song: s, onPlay: { onPlay(s, items) })
+                                .contextMenu {
+                                    Button(library.isLiked(s) ? "Unlike" : "Like") { library.toggleLike(s) }
+                                }
+                        }
+                    }
+                    .padding(.horizontal, 36)
+                    .padding(.bottom, 120)
+                }
             }
-            .frame(maxWidth: .infinity)
-
-            Spacer()
         }
     }
 }

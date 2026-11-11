@@ -18,6 +18,17 @@ mkdir -p "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/anotherMusic"
 chmod +x "$APP/Contents/MacOS/anotherMusic"
 
+ICONSET="$DIR/build/AppIcon.iconset"
+rm -rf "$ICONSET"; mkdir -p "$ICONSET"
+for sz in 16 32 128 256; do
+    sips -z $sz $sz Resources/icon.png --out "$ICONSET/icon_${sz}x${sz}.png" >/dev/null
+    sips -z $((sz*2)) $((sz*2)) Resources/icon.png --out "$ICONSET/icon_${sz}x${sz}@2x.png" >/dev/null
+done
+sips -z 512 512 Resources/icon.png --out "$ICONSET/icon_512x512.png" >/dev/null
+cp Resources/icon.png "$ICONSET/icon_512x512@2x.png"
+iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
+rm -rf "$ICONSET"
+
 cat << 'PLIST' > "$APP/Contents/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -27,6 +38,8 @@ cat << 'PLIST' > "$APP/Contents/Info.plist"
     <string>anotherMusic</string>
     <key>CFBundleIdentifier</key>
     <string>com.jinkun1998.anothermusic</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleName</key>
     <string>anotherMusic</string>
     <key>CFBundleDisplayName</key>
@@ -51,6 +64,23 @@ cat << 'PLIST' > "$APP/Contents/Info.plist"
 PLIST
 
 echo "==> Bundle ready at: $APP"
+
+if [ "$1" == "install" ]; then
+    pkill -x anotherMusic || true
+    rm -rf /Applications/anotherMusic.app
+    cp -R "$APP" /Applications/
+    echo "==> Installed /Applications/anotherMusic.app"
+    open /Applications/anotherMusic.app
+fi
+
+if [ "$1" == "dmg" ]; then
+    STAGE="$DIR/build/dmg"
+    rm -rf "$STAGE" "$DIR/build/anotherMusic.dmg"; mkdir -p "$STAGE"
+    cp -R "$APP" "$STAGE/"; ln -s /Applications "$STAGE/Applications"
+    hdiutil create -volname anotherMusic -srcfolder "$STAGE" -ov -format UDZO "$DIR/build/anotherMusic.dmg" >/dev/null
+    rm -rf "$STAGE"
+    echo "==> DMG: $DIR/build/anotherMusic.dmg"
+fi
 
 if [ "$1" == "run" ]; then
     echo "==> Launching anotherMusic.app..."

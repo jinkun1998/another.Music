@@ -2,17 +2,27 @@ import SwiftUI
 
 public struct SyncedLyricsView: View {
     let lyrics: [LyricLine]
+    var isLoading: Bool = false
     let currentTimeMs: Int64
     let durationMs: Int64
     let onSeek: (Double) -> Void
 
     public var body: some View {
-        if lyrics.isEmpty {
+        if isLoading && lyrics.isEmpty {
+            VStack(spacing: 10) {
+                ProgressView()
+                    .scaleEffect(1.0)
+                Text("Loading lyrics...")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white.opacity(0.45))
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if lyrics.isEmpty {
             VStack(spacing: 8) {
                 Image(systemName: "music.note.list")
                     .font(.system(size: 32))
                     .foregroundColor(.white.opacity(0.3))
-                Text("No synchronized lyrics available")
+                Text("No lyrics available")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.white.opacity(0.4))
             }
