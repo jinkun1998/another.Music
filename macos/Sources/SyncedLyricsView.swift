@@ -10,8 +10,11 @@ public struct SyncedLyricsView: View {
     public var body: some View {
         if isLoading && lyrics.isEmpty {
             VStack(spacing: 10) {
-                ProgressView()
-                    .scaleEffect(1.0)
+                // ponytail: no ProgressView; its NSView backing crashed SwiftUI hit-testing on track swap
+                Image(systemName: "waveform")
+                    .font(.system(size: 26))
+                    .foregroundColor(.white.opacity(0.45))
+                    .symbolEffect(.pulse)
                 Text("Loading lyrics...")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.white.opacity(0.45))

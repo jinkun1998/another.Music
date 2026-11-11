@@ -10,6 +10,7 @@ public struct ExpandedPlayerView: View {
     @State private var lyrics: [LyricLine] = []
     @State private var isLoadingLyrics: Bool = false
     @State private var useVinyl: Bool = true
+    @State private var swipeMonitor = SwipeDismissMonitor()
     @State private var isSeeking: Bool = false
     @State private var seekProgress: Double = 0.0
     @State private var showQueue: Bool = false
@@ -447,11 +448,19 @@ public struct ExpandedPlayerView: View {
                             Image(systemName: "speaker.fill")
                                 .font(.system(size: 11))
                                 .foregroundColor(.white.opacity(0.4))
-                            Slider(value: Binding(
-                                get: { Double(player.volume) },
-                                set: { player.setVolume(Float($0)) }
-                            ), in: 0...1)
-                            .frame(width: 140)
+                            // ponytail: pure SwiftUI slider; NSSlider-backed Slider crashed hit-testing
+                            GeometryReader { g in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(Color.white.opacity(0.15)).frame(height: 4)
+                                    Capsule().fill(Color.white).frame(width: g.size.width * CGFloat(player.volume), height: 4)
+                                }
+                                .frame(maxHeight: .infinity)
+                                .contentShape(Rectangle())
+                                .gesture(DragGesture(minimumDistance: 0).onChanged { v in
+                                    player.setVolume(Float(min(max(v.location.x / g.size.width, 0), 1)))
+                                })
+                            }
+                            .frame(width: 140, height: 16)
                             Image(systemName: "speaker.wave.3.fill")
                                 .font(.system(size: 11))
                                 .foregroundColor(.white.opacity(0.4))
@@ -500,9 +509,8 @@ public struct ExpandedPlayerView: View {
             }
         }
         .offset(y: dragOffset)
-        .background(
-            TrackpadSwipeDismissView(onDismiss: onClose)
-        )
+        .onAppear { swipeMonitor.start(onDismiss: onClose) }
+        .onDisappear { swipeMonitor.stop() }
         .task(id: activeTrack.id) {
             self.lyrics = []
             self.isLoadingLyrics = true
@@ -547,80 +555,38 @@ public struct ExpandedPlayerView: View {
     }
 }
 
-private struct TrackpadSwipeDismissView: NSViewRepresentable {
-    let onDismiss: () -> Void
+/// ponytail: plain NSEvent monitor; NSViewRepresentable background crashed SwiftUI hit-testing during track swaps.
+@MainActor
+private final class SwipeDismissMonitor {
+    private var monitor: Any?
+    private var accumulatedDeltaY: CGFloat = 0
 
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        context.coordinator.startMonitoring(in: view)
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        context.coordinator.onDismiss = onDismiss
-    }
-
-    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
-        coordinator.stopMonitoring()
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onDismiss: onDismiss)
-    }
-
-    final class Coordinator {
-        var onDismiss: () -> Void
-        private var monitor: Any?
-        private var accumulatedDeltaY: CGFloat = 0
-
-        init(onDismiss: @escaping () -> Void) {
-            self.onDismiss = onDismiss
-        }
-
-        func startMonitoring(in view: NSView) {
-            stopMonitoring()
-            monitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .keyDown]) { [weak self, weak view] event in
-                guard let self else { return event }
-                if event.type == .keyDown && event.keyCode == 53 { // Escape key
-                    DispatchQueue.main.async { self.onDismiss() }
-                    return nil
-                }
-                guard event.type == .scrollWheel,
-                      let window = view?.window,
-                      event.window === window else {
-                    return event
-                }
-                // Only trigger swipe-down dismiss when cursor is on left half (turntable deck) or top header (top 90pt)
-                let loc = event.locationInWindow
-                let inHeader = loc.y > (window.frame.height - 95)
-                let inLeftDeck = loc.x < (window.frame.width * 0.50)
-                guard inHeader || inLeftDeck else { return event }
-
-                if event.phase == .began {
+    func start(onDismiss: @escaping () -> Void) {
+        stop()
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .keyDown]) { [weak self] event in
+            guard let self else { return event }
+            if event.type == .keyDown && event.keyCode == 53 {
+                DispatchQueue.main.async { onDismiss() }
+                return nil
+            }
+            guard event.type == .scrollWheel, let window = event.window else { return event }
+            let loc = event.locationInWindow
+            guard loc.y > (window.frame.height - 95) || loc.x < (window.frame.width * 0.50) else { return event }
+            if event.phase == .began { self.accumulatedDeltaY = 0 }
+            let dy = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY : event.deltaY * 10
+            if abs(dy) > abs(event.scrollingDeltaX) {
+                self.accumulatedDeltaY += abs(dy)
+                if self.accumulatedDeltaY > 95 {
                     self.accumulatedDeltaY = 0
+                    DispatchQueue.main.async { onDismiss() }
                 }
-                // On macOS natural scrolling, swiping two fingers DOWN produces negative scrollingDeltaY (or positive when non-natural)
-                let dy = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY : event.deltaY * 10
-                if abs(dy) > abs(event.scrollingDeltaX) {
-                    self.accumulatedDeltaY += abs(dy)
-                    if self.accumulatedDeltaY > 95 {
-                        self.accumulatedDeltaY = 0
-                        DispatchQueue.main.async { self.onDismiss() }
-                    }
-                }
-                return event
             }
+            return event
         }
+    }
 
-        func stopMonitoring() {
-            if let monitor {
-                NSEvent.removeMonitor(monitor)
-                self.monitor = nil
-            }
-        }
-
-        deinit {
-            stopMonitoring()
-        }
+    func stop() {
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
     }
 }
