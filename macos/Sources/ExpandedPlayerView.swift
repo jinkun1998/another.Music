@@ -25,42 +25,12 @@ import AppKit
             // Solid hit-testable base: blocks clicks reaching screens underneath
             Color.black.ignoresSafeArea()
 
-            // Android Turntable dim room backdrop (cover glow + 0.58 black dim)
-            // Clipped + hit-testing disabled so overflowing .fill image never blocks header buttons
-            GeometryReader { geo in
-                ZStack {
-                    Color.black
-                    if let thumb = activeTrack.thumbnail {
-                        CachedAsyncImage(urlString: thumb) { img in
-                            img.resizable().aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            Color.black
-                        }
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .clipped()
-                        .saturation(0.6)
-                        .blur(radius: 90)
-                        .overlay(Color.black.opacity(0.58))
-                        .opacity(player.isTransitioning ? (1.0 - player.uiTransitionProgress) : 1.0)
-                    }
-
-                    if player.isTransitioning, let incoming = player.incomingTrack, let thumb = incoming.thumbnail {
-                        CachedAsyncImage(urlString: thumb) { img in
-                            img.resizable().aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            Color.clear
-                        }
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .clipped()
-                        .saturation(0.6)
-                        .blur(radius: 90)
-                        .overlay(Color.black.opacity(0.58))
-                        .opacity(player.uiTransitionProgress)
-                    }
-                }
-            }
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
+            // Android Turntable dim room backdrop with persistent image stack (never flashes black)
+            CrossfadingBackdrop(
+                currentThumbnail: activeTrack.thumbnail,
+                incomingThumbnail: player.isTransitioning ? player.incomingTrack?.thumbnail : nil,
+                transitionProgress: player.uiTransitionProgress
+            )
 
             VStack(spacing: 0) {
                 // Top header bar (inset from left traffic lights so macOS window buttons never overlap)
@@ -224,7 +194,6 @@ import AppKit
                                         .clipShape(RoundedRectangle(cornerRadius: 24))
                                         .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.15), lineWidth: 1))
                                         .shadow(color: .black.opacity(0.4), radius: 25, y: 12)
-                                        .opacity(player.isTransitioning ? (1.0 - player.uiTransitionProgress) : 1.0)
                                     }
 
                                     if player.isTransitioning, let incoming = player.incomingTrack, let thumb = incoming.thumbnail {
@@ -532,5 +501,100 @@ private final class SwipeDismissMonitor {
     func stop() {
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
+    }
+}
+
+
+@MainActor
+private struct CrossfadingBackdrop: View {
+    let currentThumbnail: String?
+    let incomingThumbnail: String?
+    let transitionProgress: Double
+
+    @State private var currentImage: NSImage?
+    @State private var incomingImage: NSImage?
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                Color.black
+
+                if let img = currentImage {
+                    Image(nsImage: img)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                        .saturation(0.7)
+                        .blur(radius: 80)
+                        .overlay(Color.black.opacity(0.50))
+                }
+
+                if let inImg = incomingImage {
+                    Image(nsImage: inImg)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                        .saturation(0.7)
+                        .blur(radius: 80)
+                        .overlay(Color.black.opacity(0.50))
+                        .opacity(transitionProgress)
+                }
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .onAppear {
+            loadCurrent(url: currentThumbnail)
+            loadIncoming(url: incomingThumbnail)
+        }
+        .onChange(of: currentThumbnail) { _, newUrl in
+            loadCurrent(url: newUrl)
+        }
+        .onChange(of: incomingThumbnail) { _, newUrl in
+            loadIncoming(url: newUrl)
+        }
+    }
+
+    private func loadCurrent(url: String?) {
+        guard let url, !url.isEmpty else { return }
+        if let cached = ImageCache.shared.image(for: url) {
+            currentImage = cached
+            return
+        }
+        guard let u = URL(string: url) else { return }
+        Task {
+            guard let (data, _) = try? await URLSession.shared.data(from: u),
+                  let img = NSImage(data: data) else { return }
+            await MainActor.run {
+                ImageCache.shared.insert(img, for: url)
+                if currentThumbnail == url {
+                    currentImage = img
+                }
+            }
+        }
+    }
+
+    private func loadIncoming(url: String?) {
+        guard let url, !url.isEmpty else {
+            incomingImage = nil
+            return
+        }
+        if let cached = ImageCache.shared.image(for: url) {
+            incomingImage = cached
+            return
+        }
+        guard let u = URL(string: url) else { return }
+        Task {
+            guard let (data, _) = try? await URLSession.shared.data(from: u),
+                  let img = NSImage(data: data) else { return }
+            await MainActor.run {
+                ImageCache.shared.insert(img, for: url)
+                if incomingThumbnail == url {
+                    incomingImage = img
+                }
+            }
+        }
     }
 }
