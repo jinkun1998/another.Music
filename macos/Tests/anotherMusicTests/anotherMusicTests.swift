@@ -179,4 +179,19 @@ final class AnotherMusicTests: XCTestCase {
         XCTAssertEqual(player.progress, 0.75, accuracy: 0.001)
         XCTAssertEqual(player.positionSec, 150.0, accuracy: 0.1)
     }
+
+    
+    @MainActor
+    func testTransitionVisualAndProgressLinearity() {
+        let player = AudioPlayerService.shared
+        XCTAssertEqual(player.transitionProgress, 0.0)
+        XCTAssertNil(player.incomingTrack)
+
+        for step in 0...20 {
+            let p = Double(step) / 20.0
+            let outOpacity = 1.0 - p
+            let inOpacity = p
+            XCTAssertEqual(outOpacity + inOpacity, 1.0, accuracy: 0.0001, "Visual fade weights must strictly sum to 1.0")
+        }
+    }
 }

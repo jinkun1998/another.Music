@@ -140,6 +140,8 @@ struct MainContentView: View {
                 FloatingWideBar(
                     selectedTab: $selectedTab,
                     currentTrack: player.currentTrack,
+                    incomingTrack: player.incomingTrack,
+                    transitionProgress: player.transitionProgress,
                     isPlaying: player.isPlaying,
                     progress: player.progress,
                     onTogglePlay: { player.togglePlayPause() },

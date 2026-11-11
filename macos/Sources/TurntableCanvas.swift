@@ -5,6 +5,9 @@ public struct TurntableCanvas: View {
     let title: String
     let isPlaying: Bool
     let progress: Double
+    var incomingThumbnail: String? = nil
+    var incomingTitle: String? = nil
+    var transitionProgress: Double = 0.0
     var onSeek: ((Double) -> Void)? = nil
 
     @State private var dragFraction: Double?
@@ -22,18 +25,27 @@ public struct TurntableCanvas: View {
     private let armLeadInDegrees: Double = 90.5
     private let armRunOutDegrees: Double = 112.0
 
-    public init(thumbnail: String?, title: String, isPlaying: Bool, progress: Double, onSeek: ((Double) -> Void)? = nil) {
+    public init(thumbnail: String?, title: String, isPlaying: Bool, progress: Double, incomingThumbnail: String? = nil, incomingTitle: String? = nil, transitionProgress: Double = 0.0, onSeek: ((Double) -> Void)? = nil) {
         self.onSeek = onSeek
         self.thumbnail = thumbnail
         self.title = title
         self.isPlaying = isPlaying
         self.progress = progress
+        self.incomingThumbnail = incomingThumbnail
+        self.incomingTitle = incomingTitle
+        self.transitionProgress = transitionProgress
     }
 
     private var armDeg: Double {
-        (isPlaying || dragFraction != nil)
-            ? armLeadInDegrees + (dragFraction ?? progress) * (armRunOutDegrees - armLeadInDegrees)
-            : armRestDegrees
+        if let drag = dragFraction {
+            return armLeadInDegrees + drag * (armRunOutDegrees - armLeadInDegrees)
+        }
+        guard isPlaying else { return armRestDegrees }
+        if transitionProgress > 0 {
+            let currentArm = armLeadInDegrees + progress * (armRunOutDegrees - armLeadInDegrees)
+            return currentArm * (1.0 - transitionProgress) + armLeadInDegrees * transitionProgress
+        }
+        return armLeadInDegrees + progress * (armRunOutDegrees - armLeadInDegrees)
     }
 
     public var body: some View {
@@ -76,7 +88,7 @@ public struct TurntableCanvas: View {
                     ZStack {
                         let labelSize = side * 0.44
 
-                        Group {
+                        ZStack {
                             if let thumbnail, let url = URL(string: thumbnail) {
                                 AsyncImage(url: url) { phase in
                                     if let img = phase.image {
@@ -85,8 +97,21 @@ public struct TurntableCanvas: View {
                                         Color(red: 0.12, green: 0.12, blue: 0.14)
                                     }
                                 }
+                                .opacity(1.0 - transitionProgress)
                             } else {
                                 Color(red: 0.12, green: 0.12, blue: 0.14)
+                                    .opacity(1.0 - transitionProgress)
+                            }
+
+                            if transitionProgress > 0, let incomingThumbnail, let url = URL(string: incomingThumbnail) {
+                                AsyncImage(url: url) { phase in
+                                    if let img = phase.image {
+                                        img.resizable().aspectRatio(contentMode: .fill)
+                                    } else {
+                                        Color(red: 0.12, green: 0.12, blue: 0.14)
+                                    }
+                                }
+                                .opacity(transitionProgress)
                             }
                         }
                         .frame(width: labelSize, height: labelSize)
@@ -125,10 +150,17 @@ public struct TurntableCanvas: View {
                             .frame(width: labelSize, height: labelSize)
 
                         // Circular Nameplate text on run-out ring
-                        if !title.isEmpty {
-                            NamePlateRing(title: title, radius: radius * 0.52)
-                                .rotationEffect(.degrees(angle))
+                        ZStack {
+                            if !title.isEmpty {
+                                NamePlateRing(title: title, radius: radius * 0.52)
+                                    .opacity(1.0 - transitionProgress)
+                            }
+                            if transitionProgress > 0, let incomingTitle, !incomingTitle.isEmpty {
+                                NamePlateRing(title: incomingTitle, radius: radius * 0.52)
+                                    .opacity(transitionProgress)
+                            }
                         }
+                        .rotationEffect(.degrees(angle))
                     }
                 }
 

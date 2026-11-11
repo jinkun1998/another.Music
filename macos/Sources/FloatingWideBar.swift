@@ -3,6 +3,8 @@ import SwiftUI
 public struct FloatingWideBar: View {
     @Binding var selectedTab: String
     let currentTrack: SongItem?
+    var incomingTrack: SongItem? = nil
+    var transitionProgress: Double = 0.0
     let isPlaying: Bool
     let progress: Double
     let onTogglePlay: () -> Void
@@ -23,28 +25,59 @@ public struct FloatingWideBar: View {
             if let track = currentTrack {
                 HStack(spacing: 12) {
                     HStack(spacing: 10) {
-                        if let thumb = track.thumbnail, let url = URL(string: thumb) {
-                            AsyncImage(url: url) { phase in
-                                if let img = phase.image {
-                                    img.resizable().aspectRatio(contentMode: .fill)
-                                } else {
-                                    Color.gray.opacity(0.3)
+                        ZStack {
+                            if let thumb = track.thumbnail, let url = URL(string: thumb) {
+                                AsyncImage(url: url) { phase in
+                                    if let img = phase.image {
+                                        img.resizable().aspectRatio(contentMode: .fill)
+                                    } else {
+                                        Color.gray.opacity(0.3)
+                                    }
                                 }
+                                .opacity(transitionProgress > 0 ? (1.0 - transitionProgress) : 1.0)
                             }
-                            .frame(width: 44, height: 44)
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
-                        }
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(track.title)
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.white)
-                                .lineLimit(1)
-                            Text(track.artist)
-                                .font(.system(size: 11))
-                                .foregroundColor(.white.opacity(0.65))
-                                .lineLimit(1)
+                            if transitionProgress > 0, let incThumb = incomingTrack?.thumbnail, let incUrl = URL(string: incThumb) {
+                                AsyncImage(url: incUrl) { phase in
+                                    if let img = phase.image {
+                                        img.resizable().aspectRatio(contentMode: .fill)
+                                    } else {
+                                        Color.gray.opacity(0.3)
+                                    }
+                                }
+                                .opacity(transitionProgress)
+                            }
+                        }
+                        .frame(width: 44, height: 44)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
+
+                        ZStack(alignment: .leading) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(track.title)
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .lineLimit(1)
+                                Text(track.artist)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.white.opacity(0.65))
+                                    .lineLimit(1)
+                            }
+                            .opacity(transitionProgress > 0 ? (1.0 - transitionProgress) : 1.0)
+
+                            if transitionProgress > 0, let incoming = incomingTrack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(incoming.title)
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(.white)
+                                        .lineLimit(1)
+                                    Text(incoming.artist)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.white.opacity(0.65))
+                                        .lineLimit(1)
+                                }
+                                .opacity(transitionProgress)
+                            }
                         }
                         .frame(minWidth: 110, maxWidth: 180, alignment: .leading)
                     }
@@ -139,6 +172,7 @@ public struct FloatingWideBar: View {
         .overlay(alignment: .bottom) {
             if currentTrack != nil {
                 GeometryReader { geo in
+                    let fillRatio = transitionProgress > 0 ? ((1.0 - transitionProgress) * progress) : progress
                     Capsule()
                         .fill(
                             LinearGradient(
@@ -150,7 +184,7 @@ public struct FloatingWideBar: View {
                                 endPoint: .trailing
                             )
                         )
-                        .frame(width: max(geo.size.width * CGFloat(progress), 0), height: 2)
+                        .frame(width: max(geo.size.width * CGFloat(fillRatio), 0), height: 2)
                 }
                 .frame(height: 2)
                 .clipShape(Capsule())

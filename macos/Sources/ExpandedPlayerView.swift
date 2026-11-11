@@ -15,6 +15,10 @@ public struct ExpandedPlayerView: View {
     @State private var showQueue: Bool = false
     @State private var dragOffset: CGFloat = 0.0
 
+    private var activeTrack: SongItem {
+        player.currentTrack ?? track
+    }
+
     public var body: some View {
         ZStack {
             // Solid hit-testable base: blocks clicks reaching screens underneath
@@ -25,7 +29,7 @@ public struct ExpandedPlayerView: View {
             GeometryReader { geo in
                 ZStack {
                     Color.black
-                    if let thumb = track.thumbnail, let url = URL(string: thumb) {
+                    if let thumb = activeTrack.thumbnail, let url = URL(string: thumb) {
                         AsyncImage(url: url) { phase in
                             if let img = phase.image {
                                 img.resizable().aspectRatio(contentMode: .fill)
@@ -38,6 +42,23 @@ public struct ExpandedPlayerView: View {
                         .saturation(0.6)
                         .blur(radius: 90)
                         .overlay(Color.black.opacity(0.58))
+                        .opacity(player.isTransitioning ? (1.0 - player.transitionProgress) : 1.0)
+                    }
+
+                    if player.isTransitioning, let incoming = player.incomingTrack, let thumb = incoming.thumbnail, let url = URL(string: thumb) {
+                        AsyncImage(url: url) { phase in
+                            if let img = phase.image {
+                                img.resizable().aspectRatio(contentMode: .fill)
+                            } else {
+                                Color.black
+                            }
+                        }
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                        .saturation(0.6)
+                        .blur(radius: 90)
+                        .overlay(Color.black.opacity(0.58))
+                        .opacity(player.transitionProgress)
                     }
                 }
             }
@@ -135,7 +156,7 @@ public struct ExpandedPlayerView: View {
                         HStack(spacing: 6) {
                             Image(systemName: player.transitionMode == .automix ? "wand.and.stars" : (player.transitionMode == .crossfade ? "waveform.badge.magnifyingglass" : "circle.slash"))
                                 .font(.system(size: 13, weight: .semibold))
-                            Text(player.isTransitioning ? "Mixing..." : player.transitionMode.rawValue)
+                            Text(player.isTransitioning ? "Mixing \(Int(player.transitionProgress * 100))%" : player.transitionMode.rawValue)
                                 .font(.system(size: 12, weight: .semibold))
                             Image(systemName: "chevron.down")
                                 .font(.system(size: 9, weight: .semibold))

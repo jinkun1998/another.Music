@@ -75,6 +75,8 @@ public final class AudioPlayerService: ObservableObject {
         }
     }
     @Published public private(set) var isTransitioning: Bool = false
+    @Published public private(set) var transitionProgress: Double = 0.0
+    @Published public private(set) var incomingTrack: SongItem? = nil
     private var transitionStartDate: Date?
 
     // Dual-Deck Crossmix Engine (Phase 2 AutoMix)
@@ -494,6 +496,8 @@ public final class AudioPlayerService: ObservableObject {
         secondaryPlayer = nil
         preloadedTrack = nil
         isTransitioning = false
+        transitionProgress = 0.0
+        incomingTrack = nil
         player?.rate = 1.0
         player?.volume = self.volume
     }
@@ -530,6 +534,8 @@ public final class AudioPlayerService: ObservableObject {
     private func startCrossmix(to pre: (song: SongItem, item: AVPlayerItem, durSec: Double), duration: Double) {
         guard !isTransitioning, let sec = secondaryPlayer else { return }
         isTransitioning = true
+        transitionProgress = 0.0
+        incomingTrack = pre.song
         let start = Date()
         transitionStartDate = start
 
@@ -541,40 +547,44 @@ public final class AudioPlayerService: ObservableObject {
         }
 
         crossmixTimer?.invalidate()
-        crossmixTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] timer in
+        // ponytail: 30ms common-mode timer drives 33fps smooth audio curves + UI crossfade without executor latency
+        let timer = Timer(timeInterval: 0.03, repeats: true) { [weak self] timer in
             Task { @MainActor [weak self] in
                 guard let self, self.isTransitioning else {
                     timer.invalidate()
                     return
                 }
-                let elapsed = Date().timeIntervalSince(start)
-                let frac = min(max(elapsed / duration, 0.0), 1.0)
+            let elapsed = Date().timeIntervalSince(start)
+            let frac = min(max(elapsed / duration, 0.0), 1.0)
+            self.transitionProgress = frac
 
-                let outVol: Float
-                let inVol: Float
+            let outVol: Float
+            let inVol: Float
 
-                if self.transitionMode == .automix {
-                    let (outCurve, inCurve) = AudioPlayerService.calculateAutomixGains(progress: frac)
-                    let totalPower = (outCurve * outCurve) + (inCurve * inCurve)
-                    let headroom = totalPower > 1.0 ? (1.0 / sqrt(totalPower)) : 1.0
-                    outVol = Float(outCurve * headroom) * self.volume
-                    inVol = Float(inCurve * headroom) * self.volume
-                } else {
-                    let theta = frac * (.pi / 2.0)
-                    outVol = Float(cos(theta)) * self.volume
-                    inVol = Float(sin(theta)) * self.volume
-                }
+            if self.transitionMode == .automix {
+                let (outCurve, inCurve) = AudioPlayerService.calculateAutomixGains(progress: frac)
+                let totalPower = (outCurve * outCurve) + (inCurve * inCurve)
+                let headroom = totalPower > 1.0 ? (1.0 / sqrt(totalPower)) : 1.0
+                outVol = Float(outCurve * headroom) * self.volume
+                inVol = Float(inCurve * headroom) * self.volume
+            } else {
+                let theta = frac * (.pi / 2.0)
+                outVol = Float(cos(theta)) * self.volume
+                inVol = Float(sin(theta)) * self.volume
+            }
 
-                self.player?.volume = outVol
-                self.secondaryPlayer?.volume = inVol
+            self.player?.volume = outVol
+            self.secondaryPlayer?.volume = inVol
 
-                if frac >= 1.0 {
-                    timer.invalidate()
-                    self.crossmixTimer = nil
-                    self.finishCrossmix(to: pre, overlapSec: duration)
+            if frac >= 1.0 {
+                timer.invalidate()
+                self.crossmixTimer = nil
+                self.finishCrossmix(to: pre, overlapSec: duration)
                 }
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        self.crossmixTimer = timer
     }
 
     private func finishCrossmix(to pre: (song: SongItem, item: AVPlayerItem, durSec: Double), overlapSec: Double) {
@@ -591,6 +601,8 @@ public final class AudioPlayerService: ObservableObject {
         self.player = newPlayer
         self.secondaryPlayer = nil
         self.isTransitioning = false
+        self.transitionProgress = 0.0
+        self.incomingTrack = nil
         self.preloadedTrack = nil
 
         if let token = timeObserverToken {
@@ -625,6 +637,7 @@ public final class AudioPlayerService: ObservableObject {
     }
 
     private func advanceOnce(_ id: ObjectIdentifier) {
+        guard !isTransitioning else { return }
         guard advancedForItem != id, let cur = player?.currentItem, ObjectIdentifier(cur) == id else { return }
         advancedForItem = id
         handleTrackEnded()
