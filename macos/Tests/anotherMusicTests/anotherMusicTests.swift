@@ -208,4 +208,28 @@ final class AnotherMusicTests: XCTestCase {
         XCTAssertEqual(evalUiFade(0.70), 1.0, accuracy: 0.001)
         XCTAssertEqual(evalUiFade(1.0), 1.0, accuracy: 0.001)
     }
+
+    @MainActor
+    func testLivePlaybackTimelineAdvances() async throws {
+        let p = AudioPlayerService.shared
+        let song1 = SongItem(id: "4NRXx6U8ABQ", title: "Blinding Lights", artist: "The Weeknd", duration: 200, kind: .song)
+        let song2 = SongItem(id: "dQw4w9WgXcQ", title: "Never Gonna Give You Up", artist: "Rick Astley", duration: 212, kind: .song)
+        p.play(song: song1, newQueue: [song1, song2])
+        
+        var advanced = false
+        for _ in 0..<50 {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            if p.positionSec > 0.1 {
+                advanced = true
+                break
+            }
+        }
+        XCTAssertTrue(advanced, "Playback should start and advance positionSec past 0.1s")
+        
+        // Test seek near the end (99%) -> should advance to song2 cleanly
+        p.seek(to: 0.99)
+        try await Task.sleep(nanoseconds: 300_000_000)
+        XCTAssertEqual(p.currentTrack?.id, song2.id, "Seek to end should cleanly advance to song2")
+    }
+
 }

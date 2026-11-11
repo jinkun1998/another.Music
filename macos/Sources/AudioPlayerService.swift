@@ -202,7 +202,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         let startSec: Double
         if let resumeAt, resumeAt > 0 {
             startSec = resumeAt
-        } else if let cur = currentTrack, cur.id == song.id, positionSec > 0 {
+        } else if let cur = currentTrack, cur.id == song.id, positionSec > 0, durationSec > 0, positionSec < durationSec - 2.0 {
             startSec = positionSec
         } else {
             startSec = 0.0
@@ -392,10 +392,12 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         if self.positionSec > 0 {
             let tol = CMTime(seconds: 0.5, preferredTimescale: 600)
             let cmTime = CMTime(seconds: self.positionSec, preferredTimescale: 600)
-            newPlayer.seek(to: cmTime, toleranceBefore: tol, toleranceAfter: tol)
+            newPlayer.seek(to: cmTime, toleranceBefore: tol, toleranceAfter: tol) { _ in
+                newPlayer.play()
+            }
+        } else {
+            newPlayer.play()
         }
-
-        newPlayer.play()
         self.isPlaying = true
         updateNowPlaying()
         maybePreloadNextTrack()
@@ -525,7 +527,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
             let sec = AVPlayer(playerItem: item)
             sec.automaticallyWaitsToMinimizeStalling = false
             sec.volume = 0
-            sec.preroll(atRate: 1.0, completionHandler: nil)
+            // sec.preroll removed
             let pre = (song: nextSong, item: item, durSec: dur)
             self.secondaryPlayer = sec
             self.preloadedTrack = pre
