@@ -46,7 +46,7 @@ import AppKit
                         .opacity(player.isTransitioning ? (1.0 - player.uiTransitionProgress) : 1.0)
                     }
 
-                    if player.isTransitioning, let incoming = player.incomingTrack, let thumb = incoming.thumbnail, let url = URL(string: thumb) {
+                    if let incoming = player.incomingTrack, let thumb = incoming.thumbnail, let url = URL(string: thumb) {
                         AsyncImage(url: url) { phase in
                             if let img = phase.image {
                                 img.resizable().aspectRatio(contentMode: .fill)
@@ -233,7 +233,7 @@ import AppKit
                                         .opacity(player.isTransitioning ? (1.0 - player.uiTransitionProgress) : 1.0)
                                     }
 
-                                    if player.isTransitioning, let incoming = player.incomingTrack, let thumb = incoming.thumbnail, let url = URL(string: thumb) {
+                                    if let incoming = player.incomingTrack, let thumb = incoming.thumbnail, let url = URL(string: thumb) {
                                         AsyncImage(url: url) { phase in
                                             if let img = phase.image {
                                                 img.resizable().aspectRatio(contentMode: .fill)
@@ -272,7 +272,7 @@ import AppKit
                                 }
                                 .opacity(player.isTransitioning ? (1.0 - player.uiTransitionProgress) : 1.0)
 
-                                if player.isTransitioning, let incoming = player.incomingTrack {
+                                if let incoming = player.incomingTrack {
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(incoming.title)
                                             .font(.system(size: 22, weight: .bold))

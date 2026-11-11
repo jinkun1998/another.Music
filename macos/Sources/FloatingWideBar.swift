@@ -37,7 +37,7 @@ import SwiftUI
                                 .opacity(transitionProgress > 0 ? (1.0 - transitionProgress) : 1.0)
                             }
 
-                            if transitionProgress > 0, let incThumb = incomingTrack?.thumbnail, let incUrl = URL(string: incThumb) {
+                            if let incThumb = incomingTrack?.thumbnail, let incUrl = URL(string: incThumb) {
                                 AsyncImage(url: incUrl) { phase in
                                     if let img = phase.image {
                                         img.resizable().aspectRatio(contentMode: .fill)
@@ -65,7 +65,7 @@ import SwiftUI
                             }
                             .opacity(transitionProgress > 0 ? (1.0 - transitionProgress) : 1.0)
 
-                            if transitionProgress > 0, let incoming = incomingTrack {
+                            if let incoming = incomingTrack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(incoming.title)
                                         .font(.system(size: 13, weight: .semibold))

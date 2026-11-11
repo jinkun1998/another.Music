@@ -103,7 +103,7 @@ import SwiftUI
                                     .opacity(1.0 - transitionProgress)
                             }
 
-                            if transitionProgress > 0, let incomingThumbnail, let url = URL(string: incomingThumbnail) {
+                            if let incomingThumbnail, let url = URL(string: incomingThumbnail) {
                                 AsyncImage(url: url) { phase in
                                     if let img = phase.image {
                                         img.resizable().aspectRatio(contentMode: .fill)
@@ -155,7 +155,7 @@ import SwiftUI
                                 NamePlateRing(title: title, radius: radius * 0.52)
                                     .opacity(1.0 - transitionProgress)
                             }
-                            if transitionProgress > 0, let incomingTitle, !incomingTitle.isEmpty {
+                            if let incomingTitle, !incomingTitle.isEmpty {
                                 NamePlateRing(title: incomingTitle, radius: radius * 0.52)
                                     .opacity(transitionProgress)
                             }

@@ -94,6 +94,8 @@ public final class AudioPlayerService: ObservableObject {
     private var preloadedTrack: (song: SongItem, item: AVPlayerItem, durSec: Double)?
     private var preloadTask: Task<Void, Never>?
     private var crossmixTimer: Timer?
+    private var crossmixDurationTarget: Double = 0
+    private var crossmixPreloaded: (song: SongItem, item: AVPlayerItem, durSec: Double)?
 
     private var radioTask: Task<Void, Never>?
     private var artwork: MPMediaItemArtwork?
@@ -587,44 +589,48 @@ public final class AudioPlayerService: ObservableObject {
         sec.playImmediately(atRate: 1.0)
 
         crossmixTimer?.invalidate()
-        // ponytail: 30ms common-mode timer drives 33fps smooth audio curves + UI crossfade without executor latency
-        let timer = Timer(timeInterval: 0.03, repeats: true) { [weak self] timer in
-            Task { @MainActor [weak self] in
-                guard let self, self.isTransitioning else {
-                    timer.invalidate()
-                    return
-                }
-            let elapsed = Date().timeIntervalSince(start)
-            let frac = min(max(elapsed / duration, 0.0), 1.0)
-            self.transitionProgress = frac
-
-            let outVol: Float
-            let inVol: Float
-
-            if self.transitionMode == .automix {
-                let (outCurve, inCurve) = AudioPlayerService.calculateAutomixGains(progress: frac)
-                let totalPower = (outCurve * outCurve) + (inCurve * inCurve)
-                let headroom = totalPower > 1.0 ? (1.0 / sqrt(totalPower)) : 1.0
-                outVol = Float(outCurve * headroom) * self.volume
-                inVol = Float(inCurve * headroom) * self.volume
-            } else {
-                let theta = frac * (.pi / 2.0)
-                outVol = Float(cos(theta)) * self.volume
-                inVol = Float(sin(theta)) * self.volume
-            }
-
-            self.player?.volume = outVol
-            self.secondaryPlayer?.volume = inVol
-
-            if frac >= 1.0 {
-                timer.invalidate()
-                self.crossmixTimer = nil
-                self.finishCrossmix(to: pre, overlapSec: duration)
-                }
-            }
-        }
+        crossmixDurationTarget = duration
+        crossmixPreloaded = pre
+        // ponytail: selector-driven runloop timer executes directly on MainActor without closure isolation hops
+        let timer = Timer(timeInterval: 0.04, target: self, selector: #selector(onCrossmixTick), userInfo: nil, repeats: true)
         RunLoop.main.add(timer, forMode: .common)
         self.crossmixTimer = timer
+    }
+
+    @objc private func onCrossmixTick() {
+        guard isTransitioning, let pre = crossmixPreloaded, let start = transitionStartDate else {
+            crossmixTimer?.invalidate()
+            crossmixTimer = nil
+            return
+        }
+        let elapsed = Date().timeIntervalSince(start)
+        let frac = min(max(elapsed / crossmixDurationTarget, 0.0), 1.0)
+        self.transitionProgress = frac
+
+        let outVol: Float
+        let inVol: Float
+
+        if self.transitionMode == .automix {
+            let (outCurve, inCurve) = AudioPlayerService.calculateAutomixGains(progress: frac)
+            let totalPower = (outCurve * outCurve) + (inCurve * inCurve)
+            let headroom = totalPower > 1.0 ? (1.0 / sqrt(totalPower)) : 1.0
+            outVol = Float(outCurve * headroom) * self.volume
+            inVol = Float(inCurve * headroom) * self.volume
+        } else {
+            let theta = frac * (.pi / 2.0)
+            outVol = Float(cos(theta)) * self.volume
+            inVol = Float(sin(theta)) * self.volume
+        }
+
+        self.player?.volume = outVol
+        self.secondaryPlayer?.volume = inVol
+
+        if frac >= 1.0 {
+            crossmixTimer?.invalidate()
+            crossmixTimer = nil
+            crossmixPreloaded = nil
+            finishCrossmix(to: pre, overlapSec: crossmixDurationTarget)
+        }
     }
 
     private func finishCrossmix(to pre: (song: SongItem, item: AVPlayerItem, durSec: Double), overlapSec: Double) {
@@ -730,20 +736,9 @@ public final class AudioPlayerService: ObservableObject {
     public func seek(to fraction: Double) {
         cancelCrossmix()
         let clamped = min(max(fraction, 0.0), 1.0)
-        if clamped >= 0.99 && durationSec > 0 {
-            self.positionSec = durationSec
-            self.progress = 1.0
-            updateNowPlaying()
-            if nextIndex != nil {
-                next(autoAdvance: true)
-            } else {
-                player?.pause()
-                isPlaying = false
-            }
-            return
-        }
 
-        let targetSec = durationSec > 0 ? min(clamped * durationSec, max(0, durationSec - 0.50)) : 0
+
+        let targetSec = durationSec > 0 ? min(clamped * durationSec, max(0, durationSec - 1.0)) : 0
         self.positionSec = targetSec
         self.progress = clamped
 
