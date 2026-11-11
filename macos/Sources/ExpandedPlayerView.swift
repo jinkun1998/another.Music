@@ -108,123 +108,80 @@ import AppKit
                     }
 
                     // Transition Mode Selector (AutoMix, Crossfade, Off)
-                    Menu {
-                        Button(action: {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                                player.setTransitionMode(.automix)
-                            }
-                        }) {
-                            HStack {
-                                Text("Auto Mix")
-                                if player.transitionMode == .automix {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-
-                        Button(action: {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                                player.setTransitionMode(.crossfade)
-                            }
-                        }) {
-                            HStack {
-                                Text("Cross Fade")
-                                if player.transitionMode == .crossfade {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-
-                        Divider()
-
-                        Button(action: {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                                player.setTransitionMode(.off)
-                            }
-                        }) {
-                            HStack {
-                                Text("Off")
-                                if player.transitionMode == .off {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: player.transitionMode == .automix ? "wand.and.stars" : (player.transitionMode == .crossfade ? "waveform.badge.magnifyingglass" : "circle.slash"))
-                                .font(.system(size: 13, weight: .semibold))
-                            Text(player.isTransitioning ? "Mixing \(Int(player.transitionProgress * 100))%" : player.transitionMode.rawValue)
-                                .font(.system(size: 12, weight: .semibold))
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.55))
-                        }
-                        .foregroundColor(player.transitionMode != .off ? .white : .white.opacity(0.60))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .background(
-                            player.transitionMode != .off
-                                ? (player.isTransitioning ? Color.purple.opacity(0.40) : Color.white.opacity(0.22))
-                                : Color.white.opacity(0.10)
-                        )
-                        .clipShape(Capsule())
-                        .overlay(
-                            Capsule().stroke(
-                                player.transitionMode != .off
-                                    ? (player.isTransitioning ? Color.purple.opacity(0.65) : Color.white.opacity(0.25))
-                                    : Color.white.opacity(0.15),
-                                lineWidth: 1
-                            )
-                        )
+                    HStack(spacing: 6) {
+                        Image(systemName: player.transitionMode == .automix ? "wand.and.stars" : (player.transitionMode == .crossfade ? "waveform.badge.magnifyingglass" : "circle.slash"))
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(player.isTransitioning ? "Mixing \(Int(player.transitionProgress * 100))%" : player.transitionMode.rawValue)
+                            .font(.system(size: 12, weight: .semibold))
                     }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
+                    .foregroundColor(player.transitionMode != .off ? .white : .white.opacity(0.60))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(
+                        player.transitionMode != .off
+                            ? (player.isTransitioning ? Color.purple.opacity(0.40) : Color.white.opacity(0.22))
+                            : Color.white.opacity(0.10)
+                    )
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule().stroke(
+                            player.transitionMode != .off
+                                ? (player.isTransitioning ? Color.purple.opacity(0.65) : Color.white.opacity(0.25))
+                                : Color.white.opacity(0.15),
+                            lineWidth: 1
+                        )
+                    )
+                    .contentShape(Capsule())
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                            switch player.transitionMode {
+                            case .automix: player.setTransitionMode(.crossfade)
+                            case .crossfade: player.setTransitionMode(.off)
+                            case .off: player.setTransitionMode(.automix)
+                            }
+                        }
+                    }
 
                     // Queue drawer toggle
-                    Button(action: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "list.bullet")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Queue")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(showQueue ? Color.white.opacity(0.22) : Color.white.opacity(0.10))
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                    .contentShape(Capsule())
+                    .onTapGesture {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
                             showQueue.toggle()
                         }
-                    }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "list.bullet")
-                                .font(.system(size: 13, weight: .semibold))
-                            Text("Queue")
-                                .font(.system(size: 12, weight: .semibold))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .background(showQueue ? Color.white.opacity(0.22) : Color.white.opacity(0.10))
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 1))
-                        .contentShape(Capsule())
                     }
-                    .buttonStyle(.plain)
 
-                    // Sleep Timer Menu
-                    Menu {
-                        ForEach(SleepTimerOption.allCases, id: \.self) { opt in
-                            Button(opt.rawValue) {
-                                player.setSleepTimer(opt)
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: player.sleepTimerOption != .off ? "moon.stars.fill" : "moon.stars")
-                                .font(.system(size: 13, weight: .semibold))
-                            Text(player.sleepTimerOption == .off ? "Timer" : player.sleepTimerOption.rawValue)
-                                .font(.system(size: 12, weight: .semibold))
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .background(player.sleepTimerOption != .off ? Color.white.opacity(0.20) : Color.white.opacity(0.10))
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                    // Sleep Timer
+                    HStack(spacing: 6) {
+                        Image(systemName: player.sleepTimerOption != .off ? "moon.stars.fill" : "moon.stars")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(player.sleepTimerOption == .off ? "Timer" : player.sleepTimerOption.rawValue)
+                            .font(.system(size: 12, weight: .semibold))
                     }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(player.sleepTimerOption != .off ? Color.white.opacity(0.20) : Color.white.opacity(0.10))
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                    .contentShape(Capsule())
+                    .onTapGesture {
+                        let all = SleepTimerOption.allCases
+                        let idx = all.firstIndex(of: player.sleepTimerOption) ?? 0
+                        let next = all[(idx + 1) % all.count]
+                        player.setSleepTimer(next)
+                    }
 
 
                 }

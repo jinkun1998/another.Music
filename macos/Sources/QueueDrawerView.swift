@@ -10,20 +10,19 @@ import SwiftUI
                     .font(.system(size: 17, weight: .bold))
                     .foregroundColor(.white)
                 Spacer()
-                Button(action: { player.toggleAutoplay() }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "infinity")
-                            .font(.system(size: 11, weight: .bold))
-                        Text("Autoplay")
-                            .font(.system(size: 11, weight: .semibold))
-                    }
-                    .foregroundColor(player.isAutoplay ? Color.white : .white.opacity(0.5))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(player.isAutoplay ? Color.white.opacity(0.18) : Color.white.opacity(0.06))
-                    .clipShape(Capsule())
+                HStack(spacing: 4) {
+                    Image(systemName: "infinity")
+                        .font(.system(size: 11, weight: .bold))
+                    Text("Autoplay")
+                        .font(.system(size: 11, weight: .semibold))
                 }
-                .buttonStyle(.plain)
+                .foregroundColor(player.isAutoplay ? Color.white : .white.opacity(0.5))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(player.isAutoplay ? Color.white.opacity(0.18) : Color.white.opacity(0.06))
+                .clipShape(Capsule())
+                .contentShape(Capsule())
+                .onTapGesture { player.toggleAutoplay() }
 
                 Text("\(player.queue.count) songs")
                     .font(.system(size: 12))
@@ -80,13 +79,12 @@ import SwiftUI
                                     .foregroundColor(Color.white)
                             }
 
-                            Button(action: { player.removeFromQueue(at: idx) }) {
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.4))
-                                    .frame(width: 24, height: 24)
-                            }
-                            .buttonStyle(.plain)
+                            Image(systemName: "xmark")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.white.opacity(0.4))
+                                .frame(width: 24, height: 24)
+                                .contentShape(Rectangle())
+                                .onTapGesture { player.removeFromQueue(at: idx) }
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)

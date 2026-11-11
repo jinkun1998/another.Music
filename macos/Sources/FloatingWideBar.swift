@@ -86,38 +86,32 @@ import SwiftUI
 
                     // Transport controls
                     HStack(spacing: 4) {
-                        Button(action: onPrevious) {
-                            Image(systemName: "backward.fill")
-                                .font(.system(size: 13))
-                                .foregroundColor(.white.opacity(0.85))
-                                .frame(width: 32, height: 32)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
+                        Image(systemName: "backward.fill")
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.85))
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                            .onTapGesture { onPrevious() }
 
-                        Button(action: onTogglePlay) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.white.opacity(0.14))
-                                    .frame(width: 36, height: 36)
-                                    .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
+                        ZStack {
+                            Circle()
+                                .fill(Color.white.opacity(0.14))
+                                .frame(width: 36, height: 36)
+                                .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
 
-                                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(.white)
-                            }
-                            .contentShape(Circle())
+                            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white)
                         }
-                        .buttonStyle(.plain)
+                        .contentShape(Circle())
+                        .onTapGesture { onTogglePlay() }
 
-                        Button(action: onNext) {
-                            Image(systemName: "forward.fill")
-                                .font(.system(size: 13))
-                                .foregroundColor(.white.opacity(0.85))
-                                .frame(width: 32, height: 32)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
+                        Image(systemName: "forward.fill")
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.85))
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                            .onTapGesture { onNext() }
                     }
 
                     // 1px divider
@@ -138,27 +132,25 @@ import SwiftUI
             HStack(spacing: 4) {
                 ForEach(tabs, id: \.0) { tab in
                     let isSelected = selectedTab == tab.0
-                    Button(action: {
+                    ZStack {
+                        if isSelected {
+                            Capsule()
+                                .fill(Color.white.opacity(0.20))
+                                .matchedGeometryEffect(id: "nav_pill", in: navNamespace)
+                        }
+
+                        Image(systemName: tab.1)
+                            .font(.system(size: 16, weight: isSelected ? .semibold : .regular))
+                            .foregroundColor(isSelected ? .white : .white.opacity(0.55))
+                            .frame(width: 52, height: 42)
+                    }
+                    .frame(width: 52, height: 42)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
                         withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
                             selectedTab = tab.0
                         }
-                    }) {
-                        ZStack {
-                            if isSelected {
-                                Capsule()
-                                    .fill(Color.white.opacity(0.20))
-                                    .matchedGeometryEffect(id: "nav_pill", in: navNamespace)
-                            }
-
-                            Image(systemName: tab.1)
-                                .font(.system(size: 16, weight: isSelected ? .semibold : .regular))
-                                .foregroundColor(isSelected ? .white : .white.opacity(0.55))
-                                .frame(width: 52, height: 42)
-                        }
-                        .frame(width: 52, height: 42)
-                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
