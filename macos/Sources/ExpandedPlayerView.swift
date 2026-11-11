@@ -328,8 +328,8 @@ import AppKit
                                         }
                                         .onEnded { value in
                                             let finalVal = min(max(value.location.x / geo.size.width, 0.0), 1.0)
-                                            player.seek(to: finalVal)
                                             isSeeking = false
+                                            player.seek(to: finalVal)
                                         }
                                 )
                             }

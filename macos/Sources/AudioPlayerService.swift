@@ -166,7 +166,15 @@ public final class AudioPlayerService: ObservableObject {
     public func play(song: SongItem, newQueue: [SongItem] = []) {
         guard song.kind == .song else { return }
         cancelCrossmix()
-        player?.pause()
+        if let p = player {
+            p.pause()
+            if let token = timeObserverToken { p.removeTimeObserver(token); timeObserverToken = nil }
+            if let token = endObserverToken { NotificationCenter.default.removeObserver(token); endObserverToken = nil }
+            if let token = failObserverToken { NotificationCenter.default.removeObserver(token); failObserverToken = nil }
+        }
+        statusObservation = nil
+        player = nil
+        isSeekingInProgress = false
 
         if !newQueue.isEmpty {
             let songs = newQueue.filter { $0.kind == .song }
@@ -409,10 +417,10 @@ public final class AudioPlayerService: ObservableObject {
                                 let remaining = max(1.5, self.durationSec - current)
                                 let effective = min(self.crossmixDuration, remaining)
                                 self.startCrossmix(to: pre, duration: effective)
-                            } else if current >= self.durationSec - 0.35 {
+                            } else if current >= self.durationSec - 0.50 {
                                 self.advanceOnce(itemId)
                             }
-                        } else if current >= self.durationSec - 0.25 && !self.isTransitioning {
+                        } else if current >= self.durationSec - 0.50 && !self.isTransitioning {
                             self.advanceOnce(itemId)
                         }
                     } else {
@@ -710,14 +718,6 @@ public final class AudioPlayerService: ObservableObject {
             secondaryPlayer?.pause()
             isPlaying = false
         } else {
-            if positionSec >= max(0, durationSec - 1.0) && durationSec > 0 {
-                if nextIndex != nil {
-                    next(autoAdvance: true)
-                    return
-                } else {
-                    seek(to: 0.0)
-                }
-            }
             p.play()
             if isTransitioning {
                 secondaryPlayer?.play()
@@ -730,7 +730,20 @@ public final class AudioPlayerService: ObservableObject {
     public func seek(to fraction: Double) {
         cancelCrossmix()
         let clamped = min(max(fraction, 0.0), 1.0)
-        let targetSec = durationSec > 0 ? min(clamped * durationSec, max(0, durationSec - 0.35)) : 0
+        if clamped >= 0.99 && durationSec > 0 {
+            self.positionSec = durationSec
+            self.progress = 1.0
+            updateNowPlaying()
+            if nextIndex != nil {
+                next(autoAdvance: true)
+            } else {
+                player?.pause()
+                isPlaying = false
+            }
+            return
+        }
+
+        let targetSec = durationSec > 0 ? min(clamped * durationSec, max(0, durationSec - 0.50)) : 0
         self.positionSec = targetSec
         self.progress = clamped
 
@@ -746,13 +759,15 @@ public final class AudioPlayerService: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.isSeekingInProgress = false
+                if self.isPlaying { self.player?.play() }
                 self.updateNowPlaying()
                 self.maybePreloadNextTrack()
             }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.30) { [weak self] in
             guard let self, self.isSeekingInProgress else { return }
             self.isSeekingInProgress = false
+            if self.isPlaying { self.player?.play() }
             self.updateNowPlaying()
             self.maybePreloadNextTrack()
         }
