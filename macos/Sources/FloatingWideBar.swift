@@ -1,6 +1,6 @@
 import SwiftUI
 
-public struct FloatingWideBar: View {
+@MainActor public struct FloatingWideBar: View {
     @Binding var selectedTab: String
     let currentTrack: SongItem?
     var incomingTrack: SongItem? = nil

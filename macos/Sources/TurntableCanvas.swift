@@ -1,6 +1,6 @@
 import SwiftUI
 
-public struct TurntableCanvas: View {
+@MainActor public struct TurntableCanvas: View {
     let thumbnail: String?
     let title: String
     let isPlaying: Bool

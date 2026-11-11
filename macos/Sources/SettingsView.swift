@@ -21,7 +21,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
     }
 }
 
-public struct SettingsView: View {
+@MainActor public struct SettingsView: View {
     @State private var selectedCategory: SettingsCategory = .customisation
     @Namespace private var catNamespace
 

@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 @main
-struct AnotherMusicApp: App {
+@MainActor struct AnotherMusicApp: App {
     @StateObject private var player = AudioPlayerService.shared
 
     var body: some Scene {
@@ -46,7 +46,7 @@ struct AnotherMusicApp: App {
 
 extension Notification.Name { static let gotoSearch = Notification.Name("gotoSearch") }
 
-struct MainContentView: View {
+@MainActor struct MainContentView: View {
     @EnvironmentObject var player: AudioPlayerService
     @State private var selectedTab: String = "Home"
     @State private var isPlayerExpanded: Bool = false

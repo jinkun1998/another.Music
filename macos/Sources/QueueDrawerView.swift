@@ -1,6 +1,6 @@
 import SwiftUI
 
-public struct QueueDrawerView: View {
+@MainActor public struct QueueDrawerView: View {
     @ObservedObject var player: AudioPlayerService
 
     public var body: some View {

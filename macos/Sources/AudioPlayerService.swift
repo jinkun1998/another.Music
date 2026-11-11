@@ -408,8 +408,10 @@ public final class AudioPlayerService: ObservableObject {
                                 let remaining = max(1.5, self.durationSec - current)
                                 let effective = min(self.crossmixDuration, remaining)
                                 self.startCrossmix(to: pre, duration: effective)
+                            } else if current >= self.durationSec - 0.35 {
+                                self.advanceOnce(itemId)
                             }
-                        } else if current >= self.durationSec - 0.25 && !self.isTransitioning && !self.shouldCrossfade {
+                        } else if current >= self.durationSec - 0.25 && !self.isTransitioning {
                             self.advanceOnce(itemId)
                         }
                     } else {
@@ -707,8 +709,13 @@ public final class AudioPlayerService: ObservableObject {
             secondaryPlayer?.pause()
             isPlaying = false
         } else {
-            if positionSec >= durationSec - 1.0 && durationSec > 0 {
-                seek(to: 0.0)
+            if positionSec >= max(0, durationSec - 1.0) && durationSec > 0 {
+                if nextIndex != nil {
+                    next(autoAdvance: true)
+                    return
+                } else {
+                    seek(to: 0.0)
+                }
             }
             p.play()
             if isTransitioning {
@@ -722,7 +729,7 @@ public final class AudioPlayerService: ObservableObject {
     public func seek(to fraction: Double) {
         cancelCrossmix()
         let clamped = min(max(fraction, 0.0), 1.0)
-        let targetSec = durationSec > 0 ? min(clamped * durationSec, max(0, durationSec - 0.1)) : 0
+        let targetSec = durationSec > 0 ? min(clamped * durationSec, max(0, durationSec - 0.35)) : 0
         self.positionSec = targetSec
         self.progress = clamped
 
@@ -734,14 +741,19 @@ public final class AudioPlayerService: ObservableObject {
 
         isSeekingInProgress = true
         let cmTime = CMTime(seconds: targetSec, preferredTimescale: 600)
-        let tol = CMTime(seconds: 0.15, preferredTimescale: 600)
-        p.seek(to: cmTime, toleranceBefore: tol, toleranceAfter: tol) { [weak self] _ in
+        p.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.isSeekingInProgress = false
                 self.updateNowPlaying()
                 self.maybePreloadNextTrack()
             }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self, self.isSeekingInProgress else { return }
+            self.isSeekingInProgress = false
+            self.updateNowPlaying()
+            self.maybePreloadNextTrack()
         }
         updateNowPlaying()
     }

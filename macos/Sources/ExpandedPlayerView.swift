@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-public struct ExpandedPlayerView: View {
+@MainActor public struct ExpandedPlayerView: View {
     let track: SongItem
     @ObservedObject var player: AudioPlayerService
     let onClose: () -> Void

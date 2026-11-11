@@ -1,6 +1,6 @@
 import SwiftUI
 
-public struct SyncedLyricsView: View {
+@MainActor public struct SyncedLyricsView: View {
     let lyrics: [LyricLine]
     var isLoading: Bool = false
     let currentTimeMs: Int64
