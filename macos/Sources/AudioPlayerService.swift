@@ -382,6 +382,7 @@ public final class AudioPlayerService: ObservableObject {
         newPlayer.play()
         self.isPlaying = true
         updateNowPlaying()
+        maybePreloadNextTrack()
     }
 
     private func attachObservers(to newPlayer: AVPlayer, item: AVPlayerItem) {
@@ -396,15 +397,19 @@ public final class AudioPlayerService: ObservableObject {
                         self.positionSec = min(current, self.durationSec)
                         self.progress = min(max(current / self.durationSec, 0.0), 1.0)
 
-                        // 1. Preload upcoming song ~14s before finish
-                        if current >= self.durationSec - 14.0 {
+                        // 1. Always ensure upcoming song is preloaded ahead of time
+                        if current >= self.durationSec - 14.0 || self.preloadedTrack == nil {
                             self.maybePreloadNextTrack()
                         }
 
                         // 2. Dual-Deck Equal-Power AutoMix Trigger
-                        if self.shouldCrossfade, let pre = self.preloadedTrack, !self.isTransitioning, current >= (self.durationSec - self.crossmixDuration) {
-                            self.startCrossmix(to: pre, duration: self.crossmixDuration)
-                        } else if current >= self.durationSec - 0.25 && !self.isTransitioning {
+                        if self.shouldCrossfade, !self.isTransitioning, current >= (self.durationSec - self.crossmixDuration) {
+                            if let pre = self.preloadedTrack {
+                                let remaining = max(1.5, self.durationSec - current)
+                                let effective = min(self.crossmixDuration, remaining)
+                                self.startCrossmix(to: pre, duration: effective)
+                            }
+                        } else if current >= self.durationSec - 0.25 && !self.isTransitioning && !self.shouldCrossfade {
                             self.advanceOnce(itemId)
                         }
                     } else {
@@ -500,9 +505,17 @@ public final class AudioPlayerService: ObservableObject {
             sec.automaticallyWaitsToMinimizeStalling = false
             sec.volume = 0
             sec.preroll(atRate: 1.0, completionHandler: nil)
+            let pre = (song: nextSong, item: item, durSec: dur)
             self.secondaryPlayer = sec
-            self.preloadedTrack = (song: nextSong, item: item, durSec: dur)
+            self.preloadedTrack = pre
             self.preloadTask = nil
+
+            // Auto-engage if already inside transition window when stream finishes resolving
+            if self.shouldCrossfade, !self.isTransitioning, self.durationSec > 0, self.positionSec >= (self.durationSec - self.crossmixDuration) {
+                let remaining = max(1.5, self.durationSec - self.positionSec)
+                let effective = min(self.crossmixDuration, remaining)
+                self.startCrossmix(to: pre, duration: effective)
+            }
         }
     }
 
@@ -641,8 +654,10 @@ public final class AudioPlayerService: ObservableObject {
         self.currentTrack = pre.song
         self.currentIndex = queue.firstIndex(where: { $0.id == pre.song.id }) ?? (currentIndex + 1)
         self.durationSec = pre.durSec
-        self.positionSec = overlapSec
-        self.progress = min(overlapSec / max(pre.durSec, 1.0), 1.0)
+        let activePos = newPlayer.currentTime().seconds
+        let effectivePos = (activePos.isFinite && activePos >= 0) ? activePos : overlapSec
+        self.positionSec = effectivePos
+        self.progress = min(effectivePos / max(pre.durSec, 1.0), 1.0)
         self.isPlaying = true
         LibraryStore.shared.recordPlay(pre.song)
 
@@ -650,6 +665,7 @@ public final class AudioPlayerService: ObservableObject {
             loadRadio(seed: pre.song)
         }
         updateNowPlaying()
+        maybePreloadNextTrack()
     }
 
     private func advanceOnce(_ id: ObjectIdentifier) {
@@ -724,6 +740,7 @@ public final class AudioPlayerService: ObservableObject {
                 guard let self else { return }
                 self.isSeekingInProgress = false
                 self.updateNowPlaying()
+                self.maybePreloadNextTrack()
             }
         }
         updateNowPlaying()
