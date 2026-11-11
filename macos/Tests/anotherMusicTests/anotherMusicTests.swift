@@ -178,6 +178,11 @@ final class AnotherMusicTests: XCTestCase {
         player.seek(to: 0.75)
         XCTAssertEqual(player.progress, 0.75, accuracy: 0.001)
         XCTAssertEqual(player.positionSec, 150.0, accuracy: 0.1)
+
+        // Scrub timeline to 90% (near end)
+        player.seek(to: 0.90)
+        XCTAssertEqual(player.progress, 0.90, accuracy: 0.001)
+        XCTAssertEqual(player.positionSec, 180.0, accuracy: 0.1)
     }
 
     

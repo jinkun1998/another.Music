@@ -26,7 +26,7 @@ public enum RepeatMode: String, CaseIterable, Sendable {
 }
 
 @MainActor
-public final class AudioPlayerService: ObservableObject {
+public final class AudioPlayerService: NSObject, ObservableObject {
     public static let shared = AudioPlayerService()
 
     private var player: AVPlayer?
@@ -102,7 +102,7 @@ public final class AudioPlayerService: ObservableObject {
     private var artworkId: String?
     private var artworkTask: Task<Void, Never>?
 
-    private init() {
+    private override init() {
         if let raw = UserDefaults.standard.string(forKey: "transitionMode") {
             if raw == "AutoMix" || raw == "Auto Mix" {
                 self.transitionMode = .automix
@@ -123,6 +123,7 @@ public final class AudioPlayerService: ObservableObject {
             }
         }
         self.isEqEnabled = UserDefaults.standard.bool(forKey: "eqEnabled")
+        super.init()
         setupRemoteCommands()
         restoreLastTrack()
     }
@@ -165,7 +166,7 @@ public final class AudioPlayerService: ObservableObject {
         updateNowPlaying()
     }
 
-    public func play(song: SongItem, newQueue: [SongItem] = []) {
+    public func play(song: SongItem, newQueue: [SongItem] = [], resumeAt: Double? = nil) {
         guard song.kind == .song else { return }
         cancelCrossmix()
         if let p = player {
@@ -198,10 +199,19 @@ public final class AudioPlayerService: ObservableObject {
             currentIndex = queue.count - 1
         }
 
+        let startSec: Double
+        if let resumeAt, resumeAt > 0 {
+            startSec = resumeAt
+        } else if let cur = currentTrack, cur.id == song.id, positionSec > 0 {
+            startSec = positionSec
+        } else {
+            startSec = 0.0
+        }
+
         self.currentTrack = song
-        self.positionSec = 0
-        self.progress = 0
+        self.positionSec = startSec
         self.durationSec = Double(song.duration ?? 0)
+        self.progress = self.durationSec > 0 ? min(startSec / self.durationSec, 1.0) : 0
         LibraryStore.shared.recordPlay(song)
         if isAutoplay && (queue.count <= 6 || currentIndex >= queue.count - 2) {
             loadRadio(seed: song)
@@ -386,8 +396,9 @@ public final class AudioPlayerService: ObservableObject {
         attachObservers(to: newPlayer, item: item)
 
         if self.positionSec > 0 {
+            let tol = CMTime(seconds: 0.5, preferredTimescale: 600)
             let cmTime = CMTime(seconds: self.positionSec, preferredTimescale: 600)
-            newPlayer.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero)
+            newPlayer.seek(to: cmTime, toleranceBefore: tol, toleranceAfter: tol)
         }
 
         newPlayer.play()
@@ -535,6 +546,8 @@ public final class AudioPlayerService: ObservableObject {
     private func cancelCrossmix() {
         crossmixTimer?.invalidate()
         crossmixTimer = nil
+        crossmixPreloaded = nil
+        transitionStartDate = nil
         preloadTask?.cancel()
         preloadTask = nil
         secondaryPlayer?.pause()
@@ -714,7 +727,8 @@ public final class AudioPlayerService: ObservableObject {
     public func togglePlayPause() {
         guard let p = player else {
             if let track = currentTrack {
-                play(song: track, newQueue: queue)
+                let resumeSec = positionSec
+                play(song: track, newQueue: queue, resumeAt: resumeSec > 0 ? resumeSec : nil)
             }
             return
         }
@@ -724,6 +738,12 @@ public final class AudioPlayerService: ObservableObject {
             secondaryPlayer?.pause()
             isPlaying = false
         } else {
+            let cur = p.currentTime().seconds
+            if positionSec > 0 && cur.isFinite && abs(cur - positionSec) > 1.0 {
+                let tol = CMTime(seconds: 0.5, preferredTimescale: 600)
+                let cm = CMTime(seconds: positionSec, preferredTimescale: 600)
+                p.seek(to: cm, toleranceBefore: tol, toleranceAfter: tol)
+            }
             p.play()
             if isTransitioning {
                 secondaryPlayer?.play()
@@ -737,8 +757,15 @@ public final class AudioPlayerService: ObservableObject {
         cancelCrossmix()
         let clamped = min(max(fraction, 0.0), 1.0)
 
+        // Scrubbed to end of track (within 1.5s): cleanly advance to next song
+        if durationSec > 0 && ((1.0 - clamped) * durationSec <= 1.5 || clamped >= 0.995) {
+            self.positionSec = durationSec
+            self.progress = 1.0
+            next(autoAdvance: true)
+            return
+        }
 
-        let targetSec = durationSec > 0 ? min(clamped * durationSec, max(0, durationSec - 1.0)) : 0
+        let targetSec = durationSec > 0 ? (clamped * durationSec) : 0
         self.positionSec = targetSec
         self.progress = clamped
 
@@ -749,8 +776,9 @@ public final class AudioPlayerService: ObservableObject {
         }
 
         isSeekingInProgress = true
+        let tol = CMTime(seconds: 0.5, preferredTimescale: 600)
         let cmTime = CMTime(seconds: targetSec, preferredTimescale: 600)
-        p.seek(to: cmTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+        p.seek(to: cmTime, toleranceBefore: tol, toleranceAfter: tol) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.isSeekingInProgress = false

@@ -85,6 +85,14 @@ import AppKit
                     .onTapGesture { onClose() }
                     .keyboardShortcut(.escape, modifiers: [])
 
+                    Text("AutoMix v2.1")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white.opacity(0.45))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.white.opacity(0.08))
+                        .clipShape(Capsule())
+
                     Spacer()
 
                     // Cover mode / Vinyl mode switcher
