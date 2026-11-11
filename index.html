@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <meta name="description" content="another.Music is a modern, native music player for macOS and Android with intelligent AutoMix transitions, turntable vinyl UI, and synced lyrics.">
+  <link rel="canonical" href="https://jinkun1998.github.io/another.Music/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="another.Music - Modern Native Music Player for macOS & Android">
+  <meta property="og:description" content="Intelligent AutoMix transitions, turntable vinyl UI, and synced lyrics—built 100% native with Swift and Kotlin.">
+  <meta property="og:url" content="https://jinkun1998.github.io/another.Music/">
+  <meta property="og:image" content="https://jinkun1998.github.io/another.Music/assets/app-logo.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="another.Music - Modern Native Music Player">
+  <meta name="twitter:description" content="Intelligent AutoMix transitions, turntable vinyl UI, and synced lyrics.">
+  <title>another.Music - Modern Native Music Player for macOS & Android</title>
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "another.Music",
+      "applicationCategory": "MultimediaApplication",
+      "operatingSystem": "macOS, Android",
+      "description": "Modern native music player for macOS and Android featuring intelligent AutoMix bass-swap transitions, turntable vinyl UI, and synced lyrics.",
+      "downloadUrl": "https://github.com/jinkun1998/another.Music/releases/latest",
+      "codeRepository": "https://github.com/jinkun1998/another.Music",
+      "license": "https://www.gnu.org/licenses/gpl-3.0.html"
+    }
+  </script>
+  <style>
+    :root {
+      --accent-pink: #fa2d48;
+      --accent-purple: #bf5af2;
+      --accent-orange: #ff9f0a;
+      --apple-blue: #2997ff;
+      --surface: #1d1d1f;
+      --surface-glass: rgba(29, 29, 31, 0.72);
+      --stroke: rgba(255, 255, 255, 0.12);
+      color-scheme: dark;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+      background: #000;
+      color: #f5f5f7;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      background: #000;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      overflow-x: hidden;
+    }
+    button, a { font: inherit; }
+    button:focus-visible, a:focus-visible { outline: 3px solid var(--apple-blue); outline-offset: 4px; }
+    .text-link { color: inherit; text-decoration: none; }
+    .text-link:hover { color: #fff; }
+
+    /* Ambient atmospheric background */
+    .ambient-glow {
+      position: fixed;
+      top: 0;
+      left: 50%;
+      width: 140vw;
+      height: 100vh;
+      transform: translateX(-50%);
+      pointer-events: none;
+      z-index: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 50% -10%, rgba(250, 45, 72, 0.20), transparent 70%),
+        radial-gradient(ellipse 45% 40% at 75% 20%, rgba(191, 90, 242, 0.16), transparent 60%),
+        radial-gradient(ellipse 40% 35% at 25% 30%, rgba(41, 151, 255, 0.12), transparent 60%);
+      opacity: var(--background-fade-opacity, 0.95);
+      transition: opacity 0.3s ease;
+    }
+    .grid-lines {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 80px 80px;
+      mask-image: radial-gradient(circle at 50% 30%, black 20%, transparent 80%);
+      -webkit-mask-image: radial-gradient(circle at 50% 30%, black 20%, transparent 80%);
+    }
+
+    /* Hero */
+    .hero {
+      position: relative;
+      display: grid;
+      min-height: 100svh;
+      place-items: center;
+      text-align: center;
+      padding: 40px 20px;
+    }
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      width: min(100% - 32px, 820px);
+      padding: 48px 0 64px;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 22px;
+      padding: 6px 14px 6px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 999px;
+      color: #fff;
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), inset 0 1px rgba(255, 255, 255, 0.15);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      line-height: 1;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+    }
+    .eyebrow:hover {
+      box-shadow: 0 8px 28px rgba(250, 45, 72, 0.25), 0 0 16px rgba(250, 45, 72, 0.2);
+      border-color: rgba(250, 45, 72, 0.4);
+      transform: translateY(-1px);
+    }
+    .eyebrow-logo {
+      width: 18px;
+      height: 18px;
+      border-radius: 5px;
+      display: block;
+    }
+    .eyebrow strong {
+      padding-left: 8px;
+      border-left: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent-pink);
+    }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 {
+      margin-bottom: 0;
+      font-size: clamp(48px, 9vw, 92px);
+      font-weight: 700;
+      line-height: 1.02;
+      letter-spacing: -0.05em;
+      background: linear-gradient(180deg, #ffffff 40%, rgba(255, 255, 255, 0.65));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .lede {
+      max-width: 640px;
+      margin: 22px auto 36px;
+      color: #a1a1a6;
+      font-size: clamp(18px, 2.2vw, 21px);
+      line-height: 1.45;
+    }
+    .lede strong {
+      color: #f5f5f7;
+      font-weight: 600;
+    }
+    .actions {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .button, .github-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 46px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 999px;
+      color: #fff;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 55%, rgba(255, 255, 255, 0.12));
+      box-shadow: inset 0 1px rgba(255, 255, 255, 0.3), inset 0 -1px rgba(255, 255, 255, 0.08), 0 8px 24px rgba(0, 0, 0, 0.4);
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      backdrop-filter: blur(20px) saturate(180%);
+    }
+    .button { padding: 12px 22px; font-size: 15px; }
+    .button.primary {
+      border-color: rgba(250, 45, 72, 0.7);
+      background: linear-gradient(135deg, #fa2d48, #d81b34 60%, #a80c21);
+      box-shadow: inset 0 1px rgba(255, 255, 255, 0.6), inset 0 -1px rgba(0, 0, 0, 0.3), 0 10px 28px rgba(250, 45, 72, 0.35);
+      color: #fff;
+      font-weight: 700;
+    }
+    .button.primary:hover {
+      background: linear-gradient(135deg, #ff415b, #e8243c 60%, #bd1229);
+      box-shadow: inset 0 1px rgba(255, 255, 255, 0.8), 0 12px 34px rgba(250, 45, 72, 0.5);
+      transform: scale(1.02);
+    }
+    .github-link {
+      width: 112px;
+      gap: 8px;
+      font-size: 14px;
+    }
+    .github-link svg { width: 19px; height: 19px; fill: currentColor; }
+    .button:hover, .github-link:hover {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08) 55%, rgba(255, 255, 255, 0.18));
+      transform: scale(1.02);
+    }
+    .release-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 20px;
+      color: var(--apple-blue);
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+    }
+    .release-badge:hover { text-decoration: underline; }
+    .version-tag {
+      background: rgba(41, 151, 255, 0.15);
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 600;
+      color: var(--apple-blue);
+    }
+
+    /* Scroll toggle link */
+    .scroll-link {
+      position: absolute;
+      z-index: 1;
+      bottom: 24px;
+      left: 50%;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transform: translateX(-50%);
+      color: #a1a1a6;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: color 0.2s ease, transform 0.2s ease;
+    }
+    .scroll-link::after { content: "↓"; font-size: 18px; }
+    .scroll-link:hover { transform: translate(-50%, -2px); color: var(--accent-pink); }
+    html.scrolled .scroll-link {
+      position: fixed;
+      z-index: 3;
+      top: 24px;
+      bottom: auto;
+      padding: 8px 14px;
+      border: 1px solid var(--stroke);
+      border-radius: 999px;
+      background: rgba(29, 29, 31, 0.8);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+    html.scrolled .scroll-link::after { content: "↑"; }
+
+    /* Features section */
+    .features {
+      position: relative;
+      z-index: 1;
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 80px 24px 100px;
+    }
+    .features-header { text-align: center; margin-bottom: 48px; }
+    .features-header h2 { font-size: clamp(32px, 4.5vw, 48px); font-weight: 700; letter-spacing: -0.04em; margin-bottom: 12px; }
+    .features-header p { color: #86868b; font-size: 18px; max-width: 580px; margin: 0 auto; }
+    .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .feature-card {
+      padding: 30px 26px;
+      border-radius: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(29, 29, 31, 0.65));
+      box-shadow: inset 0 1px rgba(255, 255, 255, 0.2), 0 20px 48px rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .feature-card:hover { transform: translateY(-4px); border-color: rgba(250, 45, 72, 0.45); }
+    .feature-card h3 { font-size: 20px; margin-bottom: 8px; letter-spacing: -0.02em; }
+    .feature-card p { color: #a1a1a6; font-size: 15px; line-height: 1.5; margin: 0; }
+    .feature-card .tag {
+      display: inline-block;
+      margin-top: 14px;
+      padding: 4px 10px;
+      border-radius: 8px;
+      background: rgba(250, 45, 72, 0.12);
+      border: 1px solid rgba(250, 45, 72, 0.25);
+      color: var(--accent-pink);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    @media (max-width: 900px) { .feature-grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 600px) { .feature-grid { grid-template-columns: 1fr; } }
+
+    /* Downloads section */
+    .downloads-section {
+      position: relative;
+      z-index: 1;
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 40px 24px 120px;
+    }
+    .downloads-header { text-align: center; margin-bottom: 40px; }
+    .downloads-header h2 { font-size: clamp(30px, 4vw, 44px); font-weight: 700; letter-spacing: -0.03em; margin-bottom: 10px; }
+    .downloads-header p { color: #86868b; font-size: 17px; }
+    .platform-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .platform-card {
+      padding: 32px 28px;
+      border-radius: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(29, 29, 31, 0.70));
+      box-shadow: inset 0 1px rgba(255, 255, 255, 0.2), 0 20px 48px rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+    }
+    .platform-icon { width: 38px; height: 38px; margin-bottom: 16px; fill: #fff; }
+    .platform-icon svg { width: 100%; height: 100%; }
+    .platform-title { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+    .platform-desc { color: #86868b; font-size: 14px; line-height: 1.45; margin-bottom: 22px; min-height: 40px; }
+    .download-list { display: flex; flex-direction: column; gap: 10px; }
+    .download-link-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.06);
+      color: #fff;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .download-link-btn:hover { background: rgba(255, 255, 255, 0.14); border-color: rgba(250, 45, 72, 0.4); }
+    .download-link-btn.highlight {
+      background: linear-gradient(135deg, rgba(250, 45, 72, 0.25), rgba(191, 90, 242, 0.15));
+      border-color: rgba(250, 45, 72, 0.5);
+    }
+    .download-meta { color: #86868b; font-size: 12px; font-weight: 500; font-family: ui-monospace, monospace; }
+    @media (max-width: 680px) { .platform-grid { grid-template-columns: 1fr; } }
+
+    /* Footer */
+    footer {
+      position: relative;
+      z-index: 1;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 40px 24px;
+      text-align: center;
+      color: #86868b;
+      font-size: 13px;
+    }
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+    .footer-links a { color: #a1a1a6; text-decoration: none; }
+    .footer-links a:hover { color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="ambient-glow" aria-hidden="true"></div>
+  <div class="grid-lines" aria-hidden="true"></div>
+  <main>
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-content">
+        <p class="eyebrow">
+          <img class="eyebrow-logo" src="assets/app-logo.png" alt="another.Music icon" />
+          <span>macOS &amp; Android</span>
+          <strong>v1.0.0</strong>
+        </p>
+        <h1 id="hero-title">another.Music</h1>
+        <p class="lede">
+          A modern native music player for macOS and Android.<br>
+          <strong>Intelligent AutoMix, turntable vinyl UI, and synced lyrics.</strong>
+        </p>
+        <div class="actions">
+          <a id="primary-download-btn" class="button primary" href="https://github.com/jinkun1998/another.Music/releases/latest"><span>Download for macOS (.dmg)</span></a>
+          <a id="secondary-download-btn" class="button" href="https://github.com/jinkun1998/another.Music/releases/latest"><span>Download for Android (.apk)</span></a>
+          <a class="github-link" href="https://github.com/jinkun1998/another.Music" target="_blank" rel="noopener" aria-label="another.Music on GitHub">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.3 11.3 0 0 0-3.6 22c.6.1.8-.3.8-.6v-2.2c-3.4.8-4.1-1.4-4.1-1.4-.6-1.4-1.3-1.8-1.3-1.8-1.1-.8.1-.8.1-.8 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.4 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.6-1.4-5.6-6a4.7 4.7 0 0 1 1.2-3.2c-.1-.3-.5-1.6.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.2 2.9.1 3.2a4.7 4.7 0 0 1 1.2 3.2c0 4.7-2.9 5.7-5.6 6 .4.4.8 1.1.8 2.2v3.2c0 .3.2.7.8.6A11.3 11.3 0 0 0 12 .7Z"/></svg>
+            <span>GitHub</span>
+          </a>
+        </div>
+        <div>
+          <a class="release-badge" id="release-badge" href="https://github.com/jinkun1998/another.Music/releases" target="_blank" rel="noopener">
+            <span class="version-tag" id="version-tag">v1.0.0</span>
+            <span>View Release Notes &rarr;</span>
+          </a>
+        </div>
+      </div>
+      <a class="scroll-link" href="#features">Explore features</a>
+    </section>
+
+    <section class="features" id="features" aria-label="Features">
+      <div class="features-header">
+        <h2>Crafted for the music you love</h2>
+        <p>100% native architecture, pro audio transitions, and zero telemetry.</p>
+      </div>
+      <div class="feature-grid">
+        <article class="feature-card">
+          <h3>Intelligent AutoMix</h3>
+          <p>Frequency-conscious Bass Swap transitions between tracks. Swaps low-end kicks, aligns micro-tempos, and protects audio headroom.</p>
+          <span class="tag">AutoMix &amp; Crossfade</span>
+        </article>
+        <article class="feature-card">
+          <h3>Turntable Vinyl Deck</h3>
+          <p>Physics-accurate 26°/sec rotating vinyl with interactive tonearm needle scrubbing and real-time audio visualization.</p>
+          <span class="tag">Vinyl &amp; Cover Mode</span>
+        </article>
+        <article class="feature-card">
+          <h3>Foldable &amp; Tablet UI</h3>
+          <p>Adaptive two-column split-view layouts tailored for large tablet displays and foldable inner/outer device postures.</p>
+          <span class="tag">Foldable Optimized</span>
+        </article>
+        <article class="feature-card">
+          <h3>Synchronized Lyrics</h3>
+          <p>Real-time line-by-line synced LRC karaoke display with automatic cascade fallbacks across LRCLIB, YouTube, and SimpMusic.</p>
+          <span class="tag">Real-Time Karaoke</span>
+        </article>
+        <article class="feature-card">
+          <h3>iCloud &amp; Cloud Sync</h3>
+          <p>Sync liked favorites, custom playlists, and listening stats seamlessly between your devices via iCloud Drive and local JSON backup.</p>
+          <span class="tag">iCloud Drive</span>
+        </article>
+        <article class="feature-card">
+          <h3>100% Native &amp; Private</h3>
+          <p>Swift &amp; AVFoundation on macOS, Kotlin &amp; Jetpack Compose on Android. Instant launch, low RAM, and completely telemetry-free.</p>
+          <span class="tag">SwiftUI &amp; Compose</span>
+        </article>
+      </div>
+    </section>
+
+    <section class="downloads-section" id="downloads" aria-label="Downloads">
+      <div class="downloads-header">
+        <h2>Download another.Music</h2>
+        <p>Free, open source, and privacy-focused.</p>
+      </div>
+      <div class="platform-grid">
+        <div class="platform-card" id="card-mac">
+          <div class="platform-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.62-.75 1.04-1.8 1.01-2.87-.96.04-2.13.64-2.79 1.41-.58.68-1.1 1.74-1.01 2.79 1.08.08 2.17-.58 2.79-1.33z"/></svg>
+          </div>
+          <div class="platform-title">macOS</div>
+          <div class="platform-desc">Requires macOS 14 Sonoma or newer. Native Apple Silicon &amp; Intel Universal bundle.</div>
+          <div class="download-list">
+            <a class="download-link-btn highlight" id="dl-mac" href="https://github.com/jinkun1998/another.Music/releases/latest">
+              <span>Universal (.dmg)</span>
+              <span class="download-meta">Apple Silicon / Intel</span>
+            </a>
+          </div>
+        </div>
+
+        <div class="platform-card" id="card-android">
+          <div class="platform-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.551 0 .9993.4482.9993.9993.0001.5511-.4483.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5902 8.4116 13.8533 8.128 12 8.128s-3.5902.2836-5.1368.8297L4.8409 5.4547a.416.416 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3432-4.1021-2.6889-7.5743-6.1185-9.4396"/></svg>
+          </div>
+          <div class="platform-title">Android</div>
+          <div class="platform-desc">Requires Android 8.0 Oreo or newer. Universal APK with foldable &amp; tablet layout support.</div>
+          <div class="download-list">
+            <a class="download-link-btn highlight" id="dl-apk" href="https://github.com/jinkun1998/another.Music/releases/latest">
+              <span>Universal (.apk)</span>
+              <span class="download-meta">Phone / Foldable / Tablet</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div><strong>another.Music</strong> &copy; 2026. Forked with attribution from <a class="text-link" href="https://github.com/realidkroo/Mochy-Music" target="_blank" rel="noopener">Mochy-Music</a>.</div>
+    <div class="footer-links">
+      <a href="https://github.com/jinkun1998/another.Music" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/jinkun1998/another.Music/releases" target="_blank" rel="noopener">Releases</a>
+      <a href="https://jinkun1998.github.io/another.notch/" target="_blank" rel="noopener">another.notch</a>
+      <a href="https://jinkun1998.github.io/another.MQTT/" target="_blank" rel="noopener">another.MQTT</a>
+      <a href="https://jinkun1998.github.io/another.Messenger/" target="_blank" rel="noopener">anotherMessenger</a>
+    </div>
+  </footer>
+
+  <script>
+    (() => {
+      const scrollLink = document.querySelector(".scroll-link");
+      const update = () => {
+        const s = window.scrollY > 300;
+        document.documentElement.classList.toggle("scrolled", s);
+        scrollLink.textContent = s ? "Back to top" : "Explore features";
+        scrollLink.setAttribute("href", s ? "#" : "#features");
+        const max = Math.max(document.documentElement.scrollHeight - innerHeight, 1);
+        document.documentElement.style.setProperty("--background-fade-opacity", String(Math.max(0.25, 0.95 - (scrollY / max) * 0.65)));
+      };
+      addEventListener("scroll", update, { passive: true });
+      update();
+
+      // Dynamically point download buttons at the newest release assets
+      fetch("https://api.github.com/repos/jinkun1998/another.Music/releases?per_page=1")
+        .then(r => r.ok ? r.json() : [])
+        .then(([rel]) => {
+          if (!rel) return;
+          const dmg = (rel.assets || []).find(x => /\.dmg$/i.test(x.name));
+          const apk = (rel.assets || []).find(x => /\.apk$/i.test(x.name));
+          if (dmg) {
+            document.getElementById("primary-download-btn").href = dmg.browser_download_url;
+            document.getElementById("dl-mac").href = dmg.browser_download_url;
+          }
+          if (apk) {
+            document.getElementById("secondary-download-btn").href = apk.browser_download_url;
+            document.getElementById("dl-apk").href = apk.browser_download_url;
+          }
+          document.getElementById("version-tag").textContent = rel.tag_name;
+          document.getElementById("release-badge").href = rel.html_url;
+        })
+        .catch(() => {});
+    })();
+  </script>
+</body>
+</html>
