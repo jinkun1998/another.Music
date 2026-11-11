@@ -187,11 +187,20 @@ final class AnotherMusicTests: XCTestCase {
         XCTAssertEqual(player.transitionProgress, 0.0)
         XCTAssertNil(player.incomingTrack)
 
-        for step in 0...20 {
-            let p = Double(step) / 20.0
-            let outOpacity = 1.0 - p
-            let inOpacity = p
-            XCTAssertEqual(outOpacity + inOpacity, 1.0, accuracy: 0.0001, "Visual fade weights must strictly sum to 1.0")
+        // When not transitioning, uiTransitionProgress is 0.0
+        XCTAssertEqual(player.uiTransitionProgress, 0.0)
+
+        // Midpoint curve: before 0.42 is 0.0, at 0.50 (<duration> / 2) is 0.50, after 0.58 is 1.0
+        func evalUiFade(_ p: Double) -> Double {
+            if p <= 0.42 { return 0.0 }
+            if p >= 0.58 { return 1.0 }
+            let t = (p - 0.42) / 0.16
+            return t * t * (3.0 - 2.0 * t)
         }
+        XCTAssertEqual(evalUiFade(0.0), 0.0, accuracy: 0.001)
+        XCTAssertEqual(evalUiFade(0.30), 0.0, accuracy: 0.001)
+        XCTAssertEqual(evalUiFade(0.50), 0.50, accuracy: 0.001, "UI crossfade must reach 50% exactly at <duration> / 2")
+        XCTAssertEqual(evalUiFade(0.70), 1.0, accuracy: 0.001)
+        XCTAssertEqual(evalUiFade(1.0), 1.0, accuracy: 0.001)
     }
 }

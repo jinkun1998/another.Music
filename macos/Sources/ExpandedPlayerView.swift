@@ -42,7 +42,7 @@ public struct ExpandedPlayerView: View {
                         .saturation(0.6)
                         .blur(radius: 90)
                         .overlay(Color.black.opacity(0.58))
-                        .opacity(player.isTransitioning ? (1.0 - player.transitionProgress) : 1.0)
+                        .opacity(player.isTransitioning ? (1.0 - player.uiTransitionProgress) : 1.0)
                     }
 
                     if player.isTransitioning, let incoming = player.incomingTrack, let thumb = incoming.thumbnail, let url = URL(string: thumb) {
@@ -58,7 +58,7 @@ public struct ExpandedPlayerView: View {
                         .saturation(0.6)
                         .blur(radius: 90)
                         .overlay(Color.black.opacity(0.58))
-                        .opacity(player.transitionProgress)
+                        .opacity(player.uiTransitionProgress)
                     }
                 }
             }
@@ -248,10 +248,13 @@ public struct ExpandedPlayerView: View {
                         ZStack {
                             if useVinyl {
                                 TurntableCanvas(
-                                    thumbnail: track.thumbnail,
-                                    title: track.title,
+                                    thumbnail: activeTrack.thumbnail,
+                                    title: activeTrack.title,
                                     isPlaying: player.isPlaying,
                                     progress: player.progress,
+                                    incomingThumbnail: player.isTransitioning ? player.incomingTrack?.thumbnail : nil,
+                                    incomingTitle: player.isTransitioning ? player.incomingTrack?.title : nil,
+                                    transitionProgress: player.uiTransitionProgress,
                                     onSeek: { player.seek(to: $0) }
                                 )
                                 .frame(width: deckW, height: deckW)
@@ -260,47 +263,83 @@ public struct ExpandedPlayerView: View {
                                     removal: .scale(scale: 0.88).combined(with: .opacity)
                                 ))
                             } else {
-                                if let thumb = track.thumbnail, let url = URL(string: thumb) {
-                                    AsyncImage(url: url) { phase in
-                                        if let img = phase.image {
-                                            img.resizable().aspectRatio(contentMode: .fill)
-                                        } else {
-                                            Color.gray.opacity(0.3)
+                                ZStack {
+                                    if let thumb = activeTrack.thumbnail, let url = URL(string: thumb) {
+                                        AsyncImage(url: url) { phase in
+                                            if let img = phase.image {
+                                                img.resizable().aspectRatio(contentMode: .fill)
+                                            } else {
+                                                Color.gray.opacity(0.3)
+                                            }
                                         }
+                                        .frame(width: deckW * 0.94, height: deckW * 0.94)
+                                        .clipShape(RoundedRectangle(cornerRadius: 24))
+                                        .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.15), lineWidth: 1))
+                                        .shadow(color: .black.opacity(0.4), radius: 25, y: 12)
+                                        .opacity(player.isTransitioning ? (1.0 - player.uiTransitionProgress) : 1.0)
                                     }
-                                    .frame(width: deckW * 0.94, height: deckW * 0.94)
-                                    .clipShape(RoundedRectangle(cornerRadius: 24))
-                                    .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.15), lineWidth: 1))
-                                    .shadow(color: .black.opacity(0.4), radius: 25, y: 12)
-                                    .scaleEffect(player.isPlaying ? 1.0 : 0.94)
-                                    .animation(.easeInOut(duration: 0.4), value: player.isPlaying)
-                                    .transition(.asymmetric(
-                                        insertion: .scale(scale: 0.88).combined(with: .opacity),
-                                        removal: .scale(scale: 0.88).combined(with: .opacity)
-                                    ))
+
+                                    if player.isTransitioning, let incoming = player.incomingTrack, let thumb = incoming.thumbnail, let url = URL(string: thumb) {
+                                        AsyncImage(url: url) { phase in
+                                            if let img = phase.image {
+                                                img.resizable().aspectRatio(contentMode: .fill)
+                                            } else {
+                                                Color.gray.opacity(0.3)
+                                            }
+                                        }
+                                        .frame(width: deckW * 0.94, height: deckW * 0.94)
+                                        .clipShape(RoundedRectangle(cornerRadius: 24))
+                                        .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.15), lineWidth: 1))
+                                        .shadow(color: .black.opacity(0.4), radius: 25, y: 12)
+                                        .opacity(player.uiTransitionProgress)
+                                    }
                                 }
+                                .scaleEffect(player.isPlaying ? 1.0 : 0.94)
+                                .animation(.easeInOut(duration: 0.4), value: player.isPlaying)
+                                .transition(.asymmetric(
+                                    insertion: .scale(scale: 0.88).combined(with: .opacity),
+                                    removal: .scale(scale: 0.88).combined(with: .opacity)
+                                ))
                             }
                         }
 
                         // Track Title, Artist & Like Button
                         HStack(spacing: 14) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(track.title)
-                                    .font(.system(size: 22, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .lineLimit(1)
-                                Text(track.artist)
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.7))
-                                    .lineLimit(1)
+                            ZStack(alignment: .leading) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(activeTrack.title)
+                                        .font(.system(size: 22, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .lineLimit(1)
+                                    Text(activeTrack.artist)
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(.white.opacity(0.7))
+                                        .lineLimit(1)
+                                }
+                                .opacity(player.isTransitioning ? (1.0 - player.uiTransitionProgress) : 1.0)
+
+                                if player.isTransitioning, let incoming = player.incomingTrack {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(incoming.title)
+                                            .font(.system(size: 22, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .lineLimit(1)
+                                        Text(incoming.artist)
+                                            .font(.system(size: 15, weight: .medium))
+                                            .foregroundColor(.white.opacity(0.7))
+                                            .lineLimit(1)
+                                    }
+                                    .opacity(player.uiTransitionProgress)
+                                }
                             }
 
                             Spacer()
 
-                            Button(action: { library.toggleLike(track) }) {
-                                Image(systemName: library.isLiked(track) ? "heart.fill" : "heart")
+                            let targetTrack = (player.isTransitioning && player.uiTransitionProgress >= 0.5) ? (player.incomingTrack ?? activeTrack) : activeTrack
+                            Button(action: { library.toggleLike(targetTrack) }) {
+                                Image(systemName: library.isLiked(targetTrack) ? "heart.fill" : "heart")
                                     .font(.system(size: 20))
-                                    .foregroundColor(library.isLiked(track) ? .white : .white.opacity(0.7))
+                                    .foregroundColor(library.isLiked(targetTrack) ? .white : .white.opacity(0.7))
                                     .frame(width: 36, height: 36)
                             }
                             .buttonStyle(.plain)
@@ -443,6 +482,7 @@ public struct ExpandedPlayerView: View {
                                 durationMs: Int64(player.durationSec * 1000),
                                 onSeek: { player.seek(to: $0) }
                             )
+                            .opacity(player.isTransitioning ? max(0.18, 1.0 - player.uiTransitionProgress) : 1.0)
                             .background(Color.white.opacity(0.04))
                             .clipShape(RoundedRectangle(cornerRadius: 24))
                             .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.08), lineWidth: 1))
@@ -463,13 +503,13 @@ public struct ExpandedPlayerView: View {
         .background(
             TrackpadSwipeDismissView(onDismiss: onClose)
         )
-        .task(id: track.id) {
+        .task(id: activeTrack.id) {
             self.lyrics = []
             self.isLoadingLyrics = true
             let fetched = await LyricsService.shared.fetchLyrics(
-                videoId: track.id,
-                title: track.title,
-                artist: track.artist,
+                videoId: activeTrack.id,
+                title: activeTrack.title,
+                artist: activeTrack.artist,
                 durationSec: Int(player.durationSec)
             )
             if !Task.isCancelled {

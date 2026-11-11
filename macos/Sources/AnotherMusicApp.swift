@@ -141,7 +141,7 @@ struct MainContentView: View {
                     selectedTab: $selectedTab,
                     currentTrack: player.currentTrack,
                     incomingTrack: player.incomingTrack,
-                    transitionProgress: player.transitionProgress,
+                    transitionProgress: player.uiTransitionProgress,
                     isPlaying: player.isPlaying,
                     progress: player.progress,
                     onTogglePlay: { player.togglePlayPause() },

@@ -79,6 +79,16 @@ public final class AudioPlayerService: ObservableObject {
     @Published public private(set) var incomingTrack: SongItem? = nil
     private var transitionStartDate: Date?
 
+    /// Apple Music-style UI crossfade centered at <auto mix seconds> / 2
+    public var uiTransitionProgress: Double {
+        guard isTransitioning else { return 0.0 }
+        let p = transitionProgress
+        if p <= 0.42 { return 0.0 }
+        if p >= 0.58 { return 1.0 }
+        let t = (p - 0.42) / 0.16
+        return t * t * (3.0 - 2.0 * t)
+    }
+
     // Dual-Deck Crossmix Engine (Phase 2 AutoMix)
     private var secondaryPlayer: AVPlayer?
     private var preloadedTrack: (song: SongItem, item: AVPlayerItem, durSec: Double)?
@@ -416,7 +426,15 @@ public final class AudioPlayerService: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.advanceOnce(itemId)
+                guard let self else { return }
+                if self.isTransitioning, let pre = self.preloadedTrack {
+                    // Outgoing track finished playing during crossmix; immediately finish handoff without dropping audio
+                    self.crossmixTimer?.invalidate()
+                    self.crossmixTimer = nil
+                    self.finishCrossmix(to: pre, overlapSec: self.crossmixDuration)
+                } else {
+                    self.advanceOnce(itemId)
+                }
             }
         }
 
@@ -479,7 +497,9 @@ public final class AudioPlayerService: ObservableObject {
                 item.forwardPlaybackEndTime = CMTime(seconds: dur, preferredTimescale: 600)
             }
             let sec = AVPlayer(playerItem: item)
+            sec.automaticallyWaitsToMinimizeStalling = false
             sec.volume = 0
+            sec.preroll(atRate: 1.0, completionHandler: nil)
             self.secondaryPlayer = sec
             self.preloadedTrack = (song: nextSong, item: item, durSec: dur)
             self.preloadTask = nil
@@ -540,11 +560,7 @@ public final class AudioPlayerService: ObservableObject {
         transitionStartDate = start
 
         sec.volume = 0
-        sec.play()
-        if transitionMode == .automix {
-            // Micro-tempo alignment: slight nudge locks incoming momentum to outgoing groove
-            sec.rate = 1.008
-        }
+        sec.playImmediately(atRate: 1.0)
 
         crossmixTimer?.invalidate()
         // ponytail: 30ms common-mode timer drives 33fps smooth audio curves + UI crossfade without executor latency
