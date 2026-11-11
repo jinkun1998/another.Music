@@ -89,13 +89,11 @@ import SwiftUI
                         let labelSize = side * 0.44
 
                         ZStack {
-                            if let thumbnail, let url = URL(string: thumbnail) {
-                                AsyncImage(url: url) { phase in
-                                    if let img = phase.image {
-                                        img.resizable().aspectRatio(contentMode: .fill)
-                                    } else {
-                                        Color(red: 0.12, green: 0.12, blue: 0.14)
-                                    }
+                            if let thumbnail {
+                                CachedAsyncImage(urlString: thumbnail) { img in
+                                    img.resizable().aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Color(red: 0.12, green: 0.12, blue: 0.14)
                                 }
                                 .opacity(1.0 - transitionProgress)
                             } else {
@@ -103,13 +101,11 @@ import SwiftUI
                                     .opacity(1.0 - transitionProgress)
                             }
 
-                            if let incomingThumbnail, let url = URL(string: incomingThumbnail) {
-                                AsyncImage(url: url) { phase in
-                                    if let img = phase.image {
-                                        img.resizable().aspectRatio(contentMode: .fill)
-                                    } else {
-                                        Color(red: 0.12, green: 0.12, blue: 0.14)
-                                    }
+                            if let incomingThumbnail {
+                                CachedAsyncImage(urlString: incomingThumbnail) { img in
+                                    img.resizable().aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Color.clear
                                 }
                                 .opacity(transitionProgress)
                             }

@@ -30,13 +30,11 @@ import AppKit
             GeometryReader { geo in
                 ZStack {
                     Color.black
-                    if let thumb = activeTrack.thumbnail, let url = URL(string: thumb) {
-                        AsyncImage(url: url) { phase in
-                            if let img = phase.image {
-                                img.resizable().aspectRatio(contentMode: .fill)
-                            } else {
-                                Color.black
-                            }
+                    if let thumb = activeTrack.thumbnail {
+                        CachedAsyncImage(urlString: thumb) { img in
+                            img.resizable().aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            Color.black
                         }
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
@@ -46,13 +44,11 @@ import AppKit
                         .opacity(player.isTransitioning ? (1.0 - player.uiTransitionProgress) : 1.0)
                     }
 
-                    if let incoming = player.incomingTrack, let thumb = incoming.thumbnail, let url = URL(string: thumb) {
-                        AsyncImage(url: url) { phase in
-                            if let img = phase.image {
-                                img.resizable().aspectRatio(contentMode: .fill)
-                            } else {
-                                Color.black
-                            }
+                    if player.isTransitioning, let incoming = player.incomingTrack, let thumb = incoming.thumbnail {
+                        CachedAsyncImage(urlString: thumb) { img in
+                            img.resizable().aspectRatio(contentMode: .fill)
+                        } placeholder: {
+                            Color.clear
                         }
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
@@ -218,13 +214,11 @@ import AppKit
                                 ))
                             } else {
                                 ZStack {
-                                    if let thumb = activeTrack.thumbnail, let url = URL(string: thumb) {
-                                        AsyncImage(url: url) { phase in
-                                            if let img = phase.image {
-                                                img.resizable().aspectRatio(contentMode: .fill)
-                                            } else {
-                                                Color.gray.opacity(0.3)
-                                            }
+                                    if let thumb = activeTrack.thumbnail {
+                                        CachedAsyncImage(urlString: thumb) { img in
+                                            img.resizable().aspectRatio(contentMode: .fill)
+                                        } placeholder: {
+                                            Color.gray.opacity(0.3)
                                         }
                                         .frame(width: deckW * 0.94, height: deckW * 0.94)
                                         .clipShape(RoundedRectangle(cornerRadius: 24))
@@ -233,13 +227,11 @@ import AppKit
                                         .opacity(player.isTransitioning ? (1.0 - player.uiTransitionProgress) : 1.0)
                                     }
 
-                                    if let incoming = player.incomingTrack, let thumb = incoming.thumbnail, let url = URL(string: thumb) {
-                                        AsyncImage(url: url) { phase in
-                                            if let img = phase.image {
-                                                img.resizable().aspectRatio(contentMode: .fill)
-                                            } else {
-                                                Color.gray.opacity(0.3)
-                                            }
+                                    if player.isTransitioning, let incoming = player.incomingTrack, let thumb = incoming.thumbnail {
+                                        CachedAsyncImage(urlString: thumb) { img in
+                                            img.resizable().aspectRatio(contentMode: .fill)
+                                        } placeholder: {
+                                            Color.clear
                                         }
                                         .frame(width: deckW * 0.94, height: deckW * 0.94)
                                         .clipShape(RoundedRectangle(cornerRadius: 24))

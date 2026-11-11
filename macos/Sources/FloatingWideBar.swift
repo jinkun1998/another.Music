@@ -26,24 +26,20 @@ import SwiftUI
                 HStack(spacing: 12) {
                     HStack(spacing: 10) {
                         ZStack {
-                            if let thumb = track.thumbnail, let url = URL(string: thumb) {
-                                AsyncImage(url: url) { phase in
-                                    if let img = phase.image {
-                                        img.resizable().aspectRatio(contentMode: .fill)
-                                    } else {
-                                        Color.gray.opacity(0.3)
-                                    }
+                            if let thumb = track.thumbnail {
+                                CachedAsyncImage(urlString: thumb) { img in
+                                    img.resizable().aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Color.gray.opacity(0.3)
                                 }
                                 .opacity(transitionProgress > 0 ? (1.0 - transitionProgress) : 1.0)
                             }
 
-                            if let incThumb = incomingTrack?.thumbnail, let incUrl = URL(string: incThumb) {
-                                AsyncImage(url: incUrl) { phase in
-                                    if let img = phase.image {
-                                        img.resizable().aspectRatio(contentMode: .fill)
-                                    } else {
-                                        Color.gray.opacity(0.3)
-                                    }
+                            if transitionProgress > 0, let incThumb = incomingTrack?.thumbnail {
+                                CachedAsyncImage(urlString: incThumb) { img in
+                                    img.resizable().aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    Color.clear
                                 }
                                 .opacity(transitionProgress)
                             }

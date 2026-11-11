@@ -195,17 +195,13 @@ final class AnotherMusicTests: XCTestCase {
         // When not transitioning, uiTransitionProgress is 0.0
         XCTAssertEqual(player.uiTransitionProgress, 0.0)
 
-        // Midpoint curve: before 0.42 is 0.0, at 0.50 (<duration> / 2) is 0.50, after 0.58 is 1.0
+        // Continuous S-curve centered at 0.50 (<duration> / 2)
         func evalUiFade(_ p: Double) -> Double {
-            if p <= 0.42 { return 0.0 }
-            if p >= 0.58 { return 1.0 }
-            let t = (p - 0.42) / 0.16
-            return t * t * (3.0 - 2.0 * t)
+            let clamped = min(max(p, 0.0), 1.0)
+            return clamped * clamped * (3.0 - 2.0 * clamped)
         }
         XCTAssertEqual(evalUiFade(0.0), 0.0, accuracy: 0.001)
-        XCTAssertEqual(evalUiFade(0.30), 0.0, accuracy: 0.001)
         XCTAssertEqual(evalUiFade(0.50), 0.50, accuracy: 0.001, "UI crossfade must reach 50% exactly at <duration> / 2")
-        XCTAssertEqual(evalUiFade(0.70), 1.0, accuracy: 0.001)
         XCTAssertEqual(evalUiFade(1.0), 1.0, accuracy: 0.001)
     }
 

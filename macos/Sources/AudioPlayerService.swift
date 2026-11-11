@@ -82,11 +82,8 @@ public final class AudioPlayerService: NSObject, ObservableObject {
     /// Apple Music-style UI crossfade centered at <auto mix seconds> / 2
     public var uiTransitionProgress: Double {
         guard isTransitioning else { return 0.0 }
-        let p = transitionProgress
-        if p <= 0.42 { return 0.0 }
-        if p >= 0.58 { return 1.0 }
-        let t = (p - 0.42) / 0.16
-        return t * t * (3.0 - 2.0 * t)
+        let p = min(max(transitionProgress, 0.0), 1.0)
+        return p * p * (3.0 - 2.0 * p)
     }
 
     // Dual-Deck Crossmix Engine (Phase 2 AutoMix)
@@ -212,6 +209,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         self.positionSec = startSec
         self.durationSec = Double(song.duration ?? 0)
         self.progress = self.durationSec > 0 ? min(startSec / self.durationSec, 1.0) : 0
+        if let thumb = song.thumbnail { ImageCache.shared.preload(urlString: thumb) }
         LibraryStore.shared.recordPlay(song)
         if isAutoplay && (queue.count <= 6 || currentIndex >= queue.count - 2) {
             loadRadio(seed: song)
@@ -513,6 +511,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         guard let nextIdx = nextIndex, queue.indices.contains(nextIdx),
               preloadedTrack == nil, preloadTask == nil else { return }
         let nextSong = queue[nextIdx]
+        if let thumb = nextSong.thumbnail { ImageCache.shared.preload(urlString: thumb) }
         preloadTask = Task {
             let res = await InnerTubeService.shared.resolveStream(videoId: nextSong.id)
             guard !Task.isCancelled, let stream = res, let url = URL(string: stream.url) else {
@@ -604,7 +603,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         crossmixDurationTarget = duration
         crossmixPreloaded = pre
         // ponytail: selector-driven runloop timer executes directly on MainActor without closure isolation hops
-        let timer = Timer(timeInterval: 0.04, target: self, selector: #selector(onCrossmixTick), userInfo: nil, repeats: true)
+        let timer = Timer(timeInterval: 0.025, target: self, selector: #selector(onCrossmixTick), userInfo: nil, repeats: true)
         RunLoop.main.add(timer, forMode: .common)
         self.crossmixTimer = timer
     }
