@@ -94,7 +94,10 @@ public final class AudioPlayerService: NSObject, ObservableObject {
     private var crossmixDurationTarget: Double = 0
     private var crossmixPreloaded: (song: SongItem, item: AVPlayerItem, durSec: Double)?
 
-    private var pauseFadeTask: Task<Void, Never>?
+    private var pauseFadeTimer: Timer?
+    private var pauseFadeStartDate: Date?
+    private var pauseFadeAnchorSec: Double?
+    private let pauseFadeDuration: Double = 0.50
     private var radioTask: Task<Void, Never>?
     private var artwork: MPMediaItemArtwork?
     private var artworkId: String?
@@ -167,10 +170,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
     public func play(song: SongItem, newQueue: [SongItem] = [], resumeAt: Double? = nil) {
         guard song.kind == .song else { return }
         cancelCrossmix()
-        pauseFadeTask?.cancel()
-        pauseFadeTask = nil
-        player?.volume = self.volume
-        secondaryPlayer?.volume = self.volume
+        cancelPauseFade()
         if let p = player {
             p.pause()
             if let token = timeObserverToken { p.removeTimeObserver(token); timeObserverToken = nil }
@@ -415,6 +415,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
                 guard let self, !self.isSeekingInProgress else { return }
                 let current = time.seconds
                 if current.isFinite && current >= 0 {
+                    if self.pauseFadeTimer != nil { return }
                     if self.durationSec > 0 {
                         self.positionSec = min(current, self.durationSec)
                         self.progress = min(max(current / self.durationSec, 0.0), 1.0)
@@ -548,8 +549,6 @@ public final class AudioPlayerService: NSObject, ObservableObject {
     }
 
     private func cancelCrossmix() {
-        pauseFadeTask?.cancel()
-        pauseFadeTask = nil
         crossmixTimer?.invalidate()
         crossmixTimer = nil
         crossmixPreloaded = nil
@@ -565,6 +564,13 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         incomingTrack = nil
         player?.rate = 1.0
         player?.volume = self.volume
+    }
+
+    /// Android Mochy TransportTransitions smoothstep pause-fade curve
+    nonisolated public static func calculatePauseFadeGain(progress: Double) -> Double {
+        let p = min(max(progress, 0.0), 1.0)
+        let smooth = p * p * (3.0 - 2.0 * p)
+        return 1.0 - smooth
     }
 
     /// Phase 2 Intelligent Bass-Swap Gain Curves
@@ -617,9 +623,11 @@ public final class AudioPlayerService: NSObject, ObservableObject {
     }
 
     @objc private func onCrossmixTick() {
-        guard isTransitioning, let pre = crossmixPreloaded, let start = transitionStartDate else {
-            crossmixTimer?.invalidate()
-            crossmixTimer = nil
+        guard isTransitioning, let pre = crossmixPreloaded, let start = transitionStartDate, pauseFadeTimer == nil, isPlaying else {
+            if !isTransitioning || crossmixPreloaded == nil || transitionStartDate == nil {
+                crossmixTimer?.invalidate()
+                crossmixTimer = nil
+            }
             return
         }
         let elapsed = Date().timeIntervalSince(start)
@@ -730,7 +738,37 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         }
     }
 
-    public func togglePlayPause() {
+    public func pause(withFade: Bool = true) {
+        guard player != nil else {
+            isPlaying = false
+            updateNowPlaying()
+            return
+        }
+
+        if pauseFadeTimer != nil {
+            // Second press during pause fade: pause immediately (Android: second press means now)
+            finishPauseNow()
+            return
+        }
+
+        guard isPlaying else { return }
+        isPlaying = false
+        updateNowPlaying()
+
+        if !withFade {
+            finishPauseNow()
+            return
+        }
+
+        // ponytail: 500ms smoothstep audio fade to silence matching Android TransportTransitions; rewinds to anchor position on settle
+        pauseFadeAnchorSec = positionSec
+        pauseFadeStartDate = Date()
+        let timer = Timer(timeInterval: 0.016, target: self, selector: #selector(onPauseFadeTick), userInfo: nil, repeats: true)
+        RunLoop.main.add(timer, forMode: .common)
+        self.pauseFadeTimer = timer
+    }
+
+    public func resume() {
         guard let p = player else {
             if let track = currentTrack {
                 let resumeSec = positionSec
@@ -739,55 +777,82 @@ public final class AudioPlayerService: NSObject, ObservableObject {
             return
         }
 
+        cancelPauseFade()
+        if durationSec > 0 && positionSec >= durationSec - 1.0 {
+            next(autoAdvance: true)
+            return
+        }
+        let cur = p.currentTime().seconds
+        if positionSec > 0 && cur.isFinite && abs(cur - positionSec) > 1.0 {
+            let tol = CMTime(seconds: 0.5, preferredTimescale: 600)
+            let cm = CMTime(seconds: positionSec, preferredTimescale: 600)
+            p.seek(to: cm, toleranceBefore: tol, toleranceAfter: tol)
+        }
+        p.play()
+        if isTransitioning {
+            secondaryPlayer?.play()
+        }
+        isPlaying = true
+        updateNowPlaying()
+    }
+
+    public func togglePlayPause() {
         if isPlaying {
-            isPlaying = false
-            updateNowPlaying()
-            pauseFadeTask?.cancel()
-            let originalVol = self.volume
-            pauseFadeTask = Task { @MainActor [weak self] in
-                guard let self else { return }
-                let steps = 16
-                let intervalNs: UInt64 = 25_000_000 // 25ms * 16 = 400ms natural acoustic fade
-                for step in 1...steps {
-                    try? await Task.sleep(nanoseconds: intervalNs)
-                    guard !Task.isCancelled, !self.isPlaying else { return }
-                    let frac = 1.0 - (Double(step) / Double(steps))
-                    let curve = frac * frac
-                    self.player?.volume = Float(curve) * originalVol
-                    self.secondaryPlayer?.volume = Float(curve) * originalVol
-                }
-                guard !Task.isCancelled, !self.isPlaying else { return }
-                self.player?.pause()
-                self.secondaryPlayer?.pause()
-                self.player?.volume = originalVol
-                self.secondaryPlayer?.volume = originalVol
-            }
+            pause(withFade: true)
         } else {
-            pauseFadeTask?.cancel()
-            pauseFadeTask = nil
-            player?.volume = self.volume
-            secondaryPlayer?.volume = self.volume
-            if durationSec > 0 && positionSec >= durationSec - 1.0 {
-                next(autoAdvance: true)
-                return
-            }
-            let cur = p.currentTime().seconds
-            if positionSec > 0 && cur.isFinite && abs(cur - positionSec) > 1.0 {
-                let tol = CMTime(seconds: 0.5, preferredTimescale: 600)
-                let cm = CMTime(seconds: positionSec, preferredTimescale: 600)
-                p.seek(to: cm, toleranceBefore: tol, toleranceAfter: tol)
-            }
-            p.play()
-            if isTransitioning {
-                secondaryPlayer?.play()
-            }
-            isPlaying = true
-            updateNowPlaying()
+            resume()
+        }
+    }
+
+    private func finishPauseNow() {
+        pauseFadeTimer?.invalidate()
+        pauseFadeTimer = nil
+        pauseFadeStartDate = nil
+        player?.pause()
+        secondaryPlayer?.pause()
+        if let anchor = pauseFadeAnchorSec, anchor >= 0 {
+            let cm = CMTime(seconds: anchor, preferredTimescale: 600)
+            player?.seek(to: cm, toleranceBefore: .zero, toleranceAfter: .zero)
+            self.positionSec = anchor
+            self.progress = self.durationSec > 0 ? (anchor / self.durationSec) : 0
+        }
+        pauseFadeAnchorSec = nil
+        player?.volume = self.volume
+        secondaryPlayer?.volume = self.volume
+        isPlaying = false
+        updateNowPlaying()
+    }
+
+    private func cancelPauseFade() {
+        pauseFadeTimer?.invalidate()
+        pauseFadeTimer = nil
+        pauseFadeStartDate = nil
+        pauseFadeAnchorSec = nil
+        player?.volume = self.volume
+        secondaryPlayer?.volume = self.volume
+    }
+
+    @objc private func onPauseFadeTick() {
+        guard let start = pauseFadeStartDate, let p = player else {
+            cancelPauseFade()
+            return
+        }
+        let elapsed = Date().timeIntervalSince(start)
+        let frac = min(max(elapsed / pauseFadeDuration, 0.0), 1.0)
+        let gain = AudioPlayerService.calculatePauseFadeGain(progress: frac)
+        let level = Float(gain) * self.volume
+
+        p.volume = max(level, 0.0)
+        secondaryPlayer?.volume = max(level, 0.0)
+
+        if frac >= 1.0 {
+            finishPauseNow()
         }
     }
 
     public func seek(to fraction: Double) {
         cancelCrossmix()
+        cancelPauseFade()
         advancedForItem = nil
         let clamped = min(max(fraction, 0.0), 1.0)
 
@@ -840,11 +905,15 @@ public final class AudioPlayerService: NSObject, ObservableObject {
     public func setVolume(_ vol: Float) {
         let clamped = min(max(vol, 0.0), 1.0)
         self.volume = clamped
-        player?.volume = clamped
+        if pauseFadeTimer == nil {
+            self.player?.volume = clamped
+            self.secondaryPlayer?.volume = clamped
+        }
     }
 
     public func next(autoAdvance: Bool = false) {
         cancelCrossmix()
+        cancelPauseFade()
         guard !queue.isEmpty else { return }
         let nextIdx = currentIndex + 1
         if nextIdx < queue.count {
@@ -876,6 +945,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
 
     public func previous() {
         cancelCrossmix()
+        cancelPauseFade()
         if positionSec > 3.0 {
             seek(to: 0.0)
             return

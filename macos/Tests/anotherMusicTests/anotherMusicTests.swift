@@ -218,4 +218,28 @@ final class AnotherMusicTests: XCTestCase {
         XCTAssertEqual(p.currentTrack?.id, song2.id, "Seek near end should cleanly advance to next song")
     }
 
+
+    func testPauseFadeVolumeSmoothstepCurve() {
+        // At progress 0.0 (moment pause is pressed): gain is full (1.0)
+        XCTAssertEqual(AudioPlayerService.calculatePauseFadeGain(progress: 0.0), 1.0, accuracy: 0.001)
+
+        // At midpoint 0.5: gain is exactly 0.50 (smooth ease)
+        XCTAssertEqual(AudioPlayerService.calculatePauseFadeGain(progress: 0.5), 0.50, accuracy: 0.001)
+
+        // At progress 1.0: gain reaches exact silence (0.0)
+        XCTAssertEqual(AudioPlayerService.calculatePauseFadeGain(progress: 1.0), 0.0, accuracy: 0.001)
+
+        // Verify gentle slope at start (no sudden drop): at 10% elapsed, volume only dropped by < 5%
+        let startDrop = 1.0 - AudioPlayerService.calculatePauseFadeGain(progress: 0.10)
+        XCTAssertLessThan(startDrop, 0.05, "Pause fade must start gently without abrupt initial volume cliff")
+
+        // Monotonic decrease across all steps
+        var prev = 1.0
+        for step in 1...20 {
+            let p = Double(step) / 20.0
+            let g = AudioPlayerService.calculatePauseFadeGain(progress: p)
+            XCTAssertLessThanOrEqual(g, prev)
+            prev = g
+        }
+    }
 }
