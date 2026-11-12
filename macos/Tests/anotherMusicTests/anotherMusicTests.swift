@@ -242,4 +242,26 @@ final class AnotherMusicTests: XCTestCase {
             prev = g
         }
     }
+
+    func testTurntableCartridgePauseGlideAndDropTransitions() {
+        let grooveDeg = 100.0
+        let restDeg = 77.5
+        let duration = 1.4
+
+        // At elapsed = 0, arm is at initial groove angle
+        XCTAssertEqual(TurntableCanvas.calculateArmGlideAngle(from: grooveDeg, to: restDeg, elapsed: 0.0, duration: duration), grooveDeg, accuracy: 0.001)
+
+        // At elapsed = half duration (0.7s), arm reaches exact midpoint (smoothstep S-curve symmetry)
+        let mid = grooveDeg + (restDeg - grooveDeg) * 0.50
+        XCTAssertEqual(TurntableCanvas.calculateArmGlideAngle(from: grooveDeg, to: restDeg, elapsed: 0.7, duration: duration), mid, accuracy: 0.001)
+
+        // At elapsed >= duration (1.4s), arm is fully parked on rest stand
+        XCTAssertEqual(TurntableCanvas.calculateArmGlideAngle(from: grooveDeg, to: restDeg, elapsed: 1.4, duration: duration), restDeg, accuracy: 0.001)
+        XCTAssertEqual(TurntableCanvas.calculateArmGlideAngle(from: grooveDeg, to: restDeg, elapsed: 2.0, duration: duration), restDeg, accuracy: 0.001)
+
+        // Arm drop on play (cubic ease-out)
+        let dropDuration = 1.1
+        XCTAssertEqual(TurntableCanvas.calculateArmDropAngle(from: restDeg, to: grooveDeg, elapsed: 0.0, duration: dropDuration), restDeg, accuracy: 0.001)
+        XCTAssertEqual(TurntableCanvas.calculateArmDropAngle(from: restDeg, to: grooveDeg, elapsed: dropDuration, duration: dropDuration), grooveDeg, accuracy: 0.001)
+    }
 }

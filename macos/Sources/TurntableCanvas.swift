@@ -28,17 +28,22 @@ import SwiftUI
     private let armLeadInDegrees: Double = 92.5
     private let armRunOutDegrees: Double = 112.0
 
-    private var armAnimation: Animation? {
-        if dragActive { return nil }
-        if isPlaying {
-            return .spring(response: 1.35, dampingFraction: 0.88)
-        } else {
-            return .easeInOut(duration: 1.6)
-        }
-    }
-
     private var isCoasting: Bool {
         !isPlaying && pauseStartDate != nil && (Date().timeIntervalSince(pauseStartDate!) < coastDuration)
+    }
+
+    nonisolated public static func calculateArmGlideAngle(from start: Double, to end: Double, elapsed: Double, duration: Double) -> Double {
+        guard duration > 0 else { return end }
+        let p = min(max(elapsed / duration, 0.0), 1.0)
+        let ease = p * p * (3.0 - 2.0 * p)
+        return start + (end - start) * ease
+    }
+
+    nonisolated public static func calculateArmDropAngle(from start: Double, to end: Double, elapsed: Double, duration: Double) -> Double {
+        guard duration > 0 else { return end }
+        let p = min(max(elapsed / duration, 0.0), 1.0)
+        let ease = 1.0 - pow(1.0 - p, 3.0)
+        return start + (end - start) * ease
     }
 
     private func currentAngle(at date: Date) -> Double {
@@ -65,7 +70,7 @@ import SwiftUI
         self.transitionProgress = transitionProgress
     }
 
-    private var armDeg: Double {
+    private var targetDeg: Double {
         if let drag = dragFraction {
             return armLeadInDegrees + drag * (armRunOutDegrees - armLeadInDegrees)
         }
@@ -77,6 +82,15 @@ import SwiftUI
         return armLeadInDegrees + progress * (armRunOutDegrees - armLeadInDegrees)
     }
 
+    private var armAnimation: Animation? {
+        if dragActive { return nil }
+        if isPlaying {
+            return .spring(response: 1.25, dampingFraction: 0.86)
+        } else {
+            return .easeInOut(duration: 1.4)
+        }
+    }
+
     public var body: some View {
         GeometryReader { proxy in
             let side = min(proxy.size.width, proxy.size.height)
@@ -85,7 +99,6 @@ import SwiftUI
 
             let pivot = CGPoint(x: side * 0.84, y: side * 0.14)
             let u = side * 0.54
-            let targetDeg = armDeg
 
             ZStack {
                 // Base deck slab under arm pivot and arm cradle
@@ -195,27 +208,35 @@ import SwiftUI
                 }
 
                 // Brushed Aluminium Tonearm with Cartridge and Arm Cradle
+                // Drawn at 90.0° reference and rotated via native SwiftUI .rotationEffect about pivot
+                // Shadow layer
                 Canvas { ctx, _ in
-                    // Arm shadow lifts slightly higher when moving to/resting on cradle outside disk
-                    let shadowOffset = isPlaying ? CGPoint(x: side * 0.012, y: side * 0.015) : CGPoint(x: side * 0.019, y: side * 0.024)
-                    drawTonearm(
-                        ctx: ctx,
-                        pivot: CGPoint(x: pivot.x + shadowOffset.x, y: pivot.y + shadowOffset.y),
-                        degrees: targetDeg,
-                        u: u,
-                        isShadow: true
-                    )
-                    // Arm metal body
                     drawTonearm(
                         ctx: ctx,
                         pivot: pivot,
-                        degrees: targetDeg,
+                        degrees: 90.0,
+                        u: u,
+                        isShadow: true
+                    )
+                }
+                .frame(width: side, height: side)
+                .rotationEffect(.degrees(targetDeg - 90.0), anchor: UnitPoint(x: 0.84, y: 0.14))
+                .offset(x: side * (isPlaying ? 0.012 : 0.018), y: side * (isPlaying ? 0.015 : 0.022))
+                .animation(armAnimation, value: targetDeg)
+
+                // Arm metal body
+                Canvas { ctx, _ in
+                    drawTonearm(
+                        ctx: ctx,
+                        pivot: pivot,
+                        degrees: 90.0,
                         u: u,
                         isShadow: false
                     )
                 }
+                .frame(width: side, height: side)
+                .rotationEffect(.degrees(targetDeg - 90.0), anchor: UnitPoint(x: 0.84, y: 0.14))
                 .animation(armAnimation, value: targetDeg)
-                .animation(armAnimation, value: isPlaying)
             }
             .frame(width: side, height: side)
             .contentShape(Rectangle())
@@ -224,7 +245,7 @@ import SwiftUI
                     .onChanged { v in
                         guard onSeek != nil else { return }
                         if !dragActive {
-                            let rad = armDeg * .pi / 180
+                            let rad = targetDeg * .pi / 180
                             let len = u * 0.876
                             let tip = CGPoint(x: pivot.x + len * cos(rad), y: pivot.y + len * sin(rad))
                             guard hypot(v.startLocation.x - tip.x, v.startLocation.y - tip.y) < side * 0.16 else { return }
@@ -246,25 +267,26 @@ import SwiftUI
                 }
             }
             .onChange(of: isPlaying) { _, playing in
+                let now = Date()
                 if playing {
                     if let pStart = pauseStartDate {
-                        let t = min(max(Date().timeIntervalSince(pStart), 0.0), coastDuration)
+                        let t = min(max(now.timeIntervalSince(pStart), 0.0), coastDuration)
                         let coastElapsed = spinDegreesPerSecond * (t - (t * t) / (2.0 * coastDuration))
                         baseAngle = (pauseStartAngle + coastElapsed).truncatingRemainder(dividingBy: 360.0)
                     } else if let start = playStartDate {
-                        baseAngle = (baseAngle + max(0, Date().timeIntervalSince(start)) * spinDegreesPerSecond).truncatingRemainder(dividingBy: 360.0)
+                        baseAngle = (baseAngle + max(0, now.timeIntervalSince(start)) * spinDegreesPerSecond).truncatingRemainder(dividingBy: 360.0)
                     }
                     pauseStartDate = nil
-                    playStartDate = Date()
+                    playStartDate = now
                 } else {
                     if let start = playStartDate {
-                        let elapsed = max(0, Date().timeIntervalSince(start))
+                        let elapsed = max(0, now.timeIntervalSince(start))
                         pauseStartAngle = (baseAngle + elapsed * spinDegreesPerSecond).truncatingRemainder(dividingBy: 360.0)
                     } else {
                         pauseStartAngle = baseAngle
                     }
                     playStartDate = nil
-                    pauseStartDate = Date()
+                    pauseStartDate = now
                 }
             }
         }

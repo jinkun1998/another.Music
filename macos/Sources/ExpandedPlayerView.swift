@@ -75,25 +75,25 @@ import AppKit
 
                     // Transition Mode Selector (AutoMix, Crossfade, Off)
                     HStack(spacing: 6) {
-                        Image(systemName: player.transitionMode == .automix ? "wand.and.stars" : (player.transitionMode == .crossfade ? "waveform.badge.magnifyingglass" : "circle.slash"))
-                            .font(.system(size: 13, weight: .semibold))
-                        Text(player.isTransitioning ? "Mixing \(Int(player.transitionProgress * 100))%" : player.transitionMode.rawValue)
+                        if player.isTransitioning {
+                            AnimatedTransitionIcon(mode: player.transitionMode, isTransitioning: true)
+                        } else {
+                            Image(systemName: player.transitionMode == .automix ? "wand.and.stars" : (player.transitionMode == .crossfade ? "waveform.badge.magnifyingglass" : "circle.slash"))
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        Text(player.transitionMode.rawValue)
                             .font(.system(size: 12, weight: .semibold))
                     }
                     .foregroundColor(player.transitionMode != .off ? .white : .white.opacity(0.60))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 7)
                     .background(
-                        player.transitionMode != .off
-                            ? (player.isTransitioning ? Color.purple.opacity(0.40) : Color.white.opacity(0.22))
-                            : Color.white.opacity(0.10)
+                        player.transitionMode != .off ? Color.white.opacity(0.22) : Color.white.opacity(0.10)
                     )
                     .clipShape(Capsule())
                     .overlay(
                         Capsule().stroke(
-                            player.transitionMode != .off
-                                ? (player.isTransitioning ? Color.purple.opacity(0.65) : Color.white.opacity(0.25))
-                                : Color.white.opacity(0.15),
+                            player.transitionMode != .off ? Color.white.opacity(0.25) : Color.white.opacity(0.15),
                             lineWidth: 1
                         )
                     )
@@ -596,5 +596,34 @@ private struct CrossfadingBackdrop: View {
                 }
             }
         }
+    }
+}
+
+
+private struct AnimatedTransitionIcon: View {
+    let mode: TransitionMode
+    let isTransitioning: Bool
+
+    @State private var pulse = false
+
+    var body: some View {
+        Image(systemName: mode == .automix ? "wand.and.stars" : (mode == .crossfade ? "waveform.badge.magnifyingglass" : "circle.slash"))
+            .font(.system(size: 13, weight: .semibold))
+            .symbolEffect(.variableColor.iterative, isActive: isTransitioning)
+            .symbolEffect(.pulse, isActive: isTransitioning)
+            .scaleEffect(isTransitioning ? (pulse ? 1.18 : 0.95) : 1.0)
+            .rotationEffect(.degrees(isTransitioning ? (pulse ? -8 : 6) : 0))
+            .animation(
+                isTransitioning
+                    ? .easeInOut(duration: 0.65).repeatForever(autoreverses: true)
+                    : .spring(response: 0.35, dampingFraction: 0.8),
+                value: pulse
+            )
+            .onAppear {
+                if isTransitioning { pulse = true }
+            }
+            .onChange(of: isTransitioning) { _, mixing in
+                pulse = mixing
+            }
     }
 }

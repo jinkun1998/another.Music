@@ -8,6 +8,8 @@ public struct AccountScreen: View {
     @State private var showingEditSheet: Bool = false
     @State private var showingSettingsSheet: Bool = false
     @State private var editName: String = ""
+    // ponytail: freeze ranking during profile browsing; re-rank on tab entrance
+    @State private var displayedTopArtists: [(artist: String, count: Int)] = LibraryStore.shared.topArtists
 
     public init(onPlay: ((SongItem, [SongItem]) -> Void)? = nil) {
         self.onPlay = onPlay
@@ -182,7 +184,7 @@ public struct AccountScreen: View {
                 }
 
                 // Top Artists Shelf
-                if !library.topArtists.isEmpty {
+                if !displayedTopArtists.isEmpty {
                     VStack(alignment: .leading, spacing: 14) {
                         Text("Top Artists")
                             .font(.system(size: 20, weight: .bold))
@@ -191,7 +193,7 @@ public struct AccountScreen: View {
 
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
-                                ForEach(library.topArtists, id: \.artist) { item in
+                                ForEach(displayedTopArtists, id: \.artist) { item in
                                     HStack(spacing: 10) {
                                         Circle()
                                             .fill(Color.white.opacity(0.12))
@@ -226,6 +228,9 @@ public struct AccountScreen: View {
                 Color.clear.frame(height: 120)
             }
             .padding(.top, 24)
+        }
+        .onAppear {
+            displayedTopArtists = library.topArtists
         }
         .sheet(isPresented: $showingEditSheet) {
             EditProfileView(name: $editName) { newName in
