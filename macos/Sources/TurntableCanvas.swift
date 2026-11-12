@@ -14,16 +14,45 @@ import SwiftUI
     @State private var dragActive = false
     @State private var baseAngle: Double = 0.0
     @State private var playStartDate: Date? = nil
+    @State private var pauseStartDate: Date? = nil
+    @State private var pauseStartAngle: Double = 0.0
 
     // ponytail: matches Android DiscCoverStack SpinDegreesPerSecond = 26f (13.85s per rev)
     private let spinDegreesPerSecond: Double = 26.0
+    private let coastDuration: Double = 1.3
 
     private let vinylBlack = Color(red: 9/255, green: 9/255, blue: 10/255)
     private let trackGaps: [CGFloat] = [0.665, 0.745, 0.83, 0.905]
 
-    private let armRestDegrees: Double = 80.5
+    private let armRestDegrees: Double = 77.5
     private let armLeadInDegrees: Double = 92.5
     private let armRunOutDegrees: Double = 112.0
+
+    private var armAnimation: Animation? {
+        if dragActive { return nil }
+        if isPlaying {
+            return .spring(response: 1.35, dampingFraction: 0.88)
+        } else {
+            return .easeInOut(duration: 1.6)
+        }
+    }
+
+    private var isCoasting: Bool {
+        !isPlaying && pauseStartDate != nil && (Date().timeIntervalSince(pauseStartDate!) < coastDuration)
+    }
+
+    private func currentAngle(at date: Date) -> Double {
+        if isPlaying, let start = playStartDate {
+            let elapsed = max(0, date.timeIntervalSince(start))
+            return (baseAngle + elapsed * spinDegreesPerSecond).truncatingRemainder(dividingBy: 360.0)
+        } else if let pStart = pauseStartDate {
+            let t = min(max(date.timeIntervalSince(pStart), 0.0), coastDuration)
+            let coastElapsed = spinDegreesPerSecond * (t - (t * t) / (2.0 * coastDuration))
+            return (pauseStartAngle + coastElapsed).truncatingRemainder(dividingBy: 360.0)
+        } else {
+            return baseAngle
+        }
+    }
 
     public init(thumbnail: String?, title: String, isPlaying: Bool, progress: Double, incomingThumbnail: String? = nil, incomingTitle: String? = nil, transitionProgress: Double = 0.0, onSeek: ((Double) -> Void)? = nil) {
         self.onSeek = onSeek
@@ -85,10 +114,9 @@ import SwiftUI
                     drawPlatter(ctx: ctx, center: center, radius: radius)
                 }
 
-                // Turning Center Label (Artwork) at 26 deg/sec matching Android DiscCoverStack
-                TimelineView(.animation(paused: !isPlaying)) { timeline in
-                    let elapsed = (isPlaying && playStartDate != nil) ? max(0, timeline.date.timeIntervalSince(playStartDate!)) : 0
-                    let angle = (baseAngle + elapsed * spinDegreesPerSecond).truncatingRemainder(dividingBy: 360.0)
+                // Turning Center Label (Artwork) with smooth deceleration coast matching real turntable platter
+                TimelineView(.animation(paused: !isPlaying && !isCoasting)) { timeline in
+                    let angle = currentAngle(at: timeline.date)
 
                     ZStack {
                         let labelSize = radius * 0.88
@@ -168,10 +196,11 @@ import SwiftUI
 
                 // Brushed Aluminium Tonearm with Cartridge and Arm Cradle
                 Canvas { ctx, _ in
-                    // Arm shadow
+                    // Arm shadow lifts slightly higher when moving to/resting on cradle outside disk
+                    let shadowOffset = isPlaying ? CGPoint(x: side * 0.012, y: side * 0.015) : CGPoint(x: side * 0.019, y: side * 0.024)
                     drawTonearm(
                         ctx: ctx,
-                        pivot: CGPoint(x: pivot.x + side * 0.015, y: pivot.y + side * 0.02),
+                        pivot: CGPoint(x: pivot.x + shadowOffset.x, y: pivot.y + shadowOffset.y),
                         degrees: targetDeg,
                         u: u,
                         isShadow: true
@@ -185,7 +214,8 @@ import SwiftUI
                         isShadow: false
                     )
                 }
-                .animation(dragActive ? nil : .spring(response: 0.72, dampingFraction: 0.84), value: targetDeg)
+                .animation(armAnimation, value: targetDeg)
+                .animation(armAnimation, value: isPlaying)
             }
             .frame(width: side, height: side)
             .contentShape(Rectangle())
@@ -217,12 +247,24 @@ import SwiftUI
             }
             .onChange(of: isPlaying) { _, playing in
                 if playing {
+                    if let pStart = pauseStartDate {
+                        let t = min(max(Date().timeIntervalSince(pStart), 0.0), coastDuration)
+                        let coastElapsed = spinDegreesPerSecond * (t - (t * t) / (2.0 * coastDuration))
+                        baseAngle = (pauseStartAngle + coastElapsed).truncatingRemainder(dividingBy: 360.0)
+                    } else if let start = playStartDate {
+                        baseAngle = (baseAngle + max(0, Date().timeIntervalSince(start)) * spinDegreesPerSecond).truncatingRemainder(dividingBy: 360.0)
+                    }
+                    pauseStartDate = nil
                     playStartDate = Date()
                 } else {
                     if let start = playStartDate {
-                        baseAngle = (baseAngle + max(0, Date().timeIntervalSince(start)) * spinDegreesPerSecond).truncatingRemainder(dividingBy: 360.0)
+                        let elapsed = max(0, Date().timeIntervalSince(start))
+                        pauseStartAngle = (baseAngle + elapsed * spinDegreesPerSecond).truncatingRemainder(dividingBy: 360.0)
+                    } else {
+                        pauseStartAngle = baseAngle
                     }
                     playStartDate = nil
+                    pauseStartDate = Date()
                 }
             }
         }
