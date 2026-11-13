@@ -67,19 +67,20 @@ jobs:
           retention-days: 30
 
       - name: Publish GitHub Release
-        if: github.repository == 'jinkun1998/another.Music' && (github.ref == 'refs/heads/android/upstream-foldable' || github.event_name == 'workflow_dispatch')
+        if: github.repository == 'jinkun1998/another.Music' && (github.ref == 'refs/heads/android/upstream-foldable' || github.ref == 'refs/heads/android/upstream-sync' || github.event_name == 'workflow_dispatch')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           APK=$(ls app/build/outputs/apk/universalGms/release/*.apk | head -n 1)
-          TAG="v8.3.2-foldable"
+          VERSION=$(grep -oE 'versionName = "[0-9.]+' app/build.gradle.kts | grep -oE '[0-9.]+')
+          TAG="v${VERSION}-1"
           gh release delete "$TAG" --yes --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
           git tag -d "$TAG" 2>/dev/null || true
           git push origin ":refs/tags/$TAG" 2>/dev/null || true
           gh release create "$TAG" "$APK" \
-            --title "anotherMusic Android v8.3.2 (Foldable + Upstream)" \
+            --title "anotherMusic Android v${VERSION}-1" \
             --notes "Release APK for Android (Universal GMS):
-          - Upstream sync: includes all latest Mochy-Music features (Bluetooth auto-resume, search history toggle, custom folder storage, radio continuity).
+          - Upstream sync: v${VERSION} (includes all latest Mochy-Music features).
           - Foldable/Tablet optimizations: bounded covers, adaptive 2-column search, clamped controls.
           - Full release optimizations (R8 minification, resource shrinking)." \
             --repo "$GITHUB_REPOSITORY" \
