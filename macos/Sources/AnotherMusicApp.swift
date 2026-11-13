@@ -105,9 +105,48 @@ extension Notification.Name { static let gotoSearch = Notification.Name("gotoSea
                             handle(song, queue)
                         })
                     case "Search":
-                        SearchScreen(onPlay: { song, queue in
-                            handle(song, queue)
-                        })
+                        SearchScreen(
+                            onPlay: { song, queue in
+                                handle(song, queue)
+                            },
+                            onNavigateAlbum: { browseId in
+                                Task {
+                                    if let album = await InnerTubeService.shared.fetchBrowseAlbumOrPlaylist(browseId: browseId) {
+                                        await MainActor.run {
+                                            collection = SongItem(
+                                                id: album.tracks.first?.id ?? browseId,
+                                                title: album.title,
+                                                artist: album.artist,
+                                                album: album.title,
+                                                thumbnail: album.thumbnail,
+                                                kind: .album,
+                                                browseId: browseId
+                                            )
+                                        }
+                                    }
+                                }
+                            },
+                            onNavigateArtist: { browseId in
+                                // Navigate to artist page
+                            },
+                            onNavigatePlaylist: { browseId in
+                                Task {
+                                    if let playlist = await InnerTubeService.shared.fetchBrowseAlbumOrPlaylist(browseId: browseId) {
+                                        await MainActor.run {
+                                            collection = SongItem(
+                                                id: playlist.tracks.first?.id ?? browseId,
+                                                title: playlist.title,
+                                                artist: playlist.artist,
+                                                album: playlist.title,
+                                                thumbnail: playlist.thumbnail,
+                                                kind: .playlist,
+                                                browseId: browseId
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        )
                     case "Library":
                         LibraryScreen(onPlay: { song, queue in
                             handle(song, queue)
