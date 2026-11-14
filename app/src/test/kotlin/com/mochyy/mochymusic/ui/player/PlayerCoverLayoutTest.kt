@@ -43,4 +43,34 @@ class PlayerCoverLayoutTest {
         val remainingTextWidth = w - textStart - 24f
         assertTrue("Text width ($remainingTextWidth) must exceed 350 on landscape foldable", remainingTextWidth > 350f)
     }
+
+    @Test
+    fun `turntable layout mode discriminates mobile and foldable viewports`() {
+        org.junit.Assert.assertFalse(isTurntableWideLayout(360))
+        org.junit.Assert.assertFalse(isTurntableWideLayout(390))
+        org.junit.Assert.assertFalse(isTurntableWideLayout(412))
+        org.junit.Assert.assertTrue(isTurntableWideLayout(500))
+        org.junit.Assert.assertTrue(isTurntableWideLayout(674))
+        org.junit.Assert.assertTrue(isTurntableWideLayout(800))
+    }
+
+    @Test
+    fun `turntable controls horizontal pills fits on foldable title row`() {
+        val pillWidth = 59f
+        val pillGap = 11f
+        val horizontalPillsWidth = 4 * pillWidth + 3 * pillGap
+        assertEquals(269f, horizontalPillsWidth, 0.01f)
+        val availableWidth = 600f - 60f - 43f - 28f
+        val titleWidth = availableWidth - horizontalPillsWidth
+        assertTrue("Title width ($titleWidth) must be positive on wide screens", titleWidth > 150f)
+    }
+
+    @Test
+    fun `parse full version parses release version with hyphenated build number`() {
+        val parsed = com.mochyy.mochymusic.core.updater.parseFullVersion("anotherMusic Android v8.4.0-1 v8.4.0-1")
+        assertEquals(8, parsed.major)
+        assertEquals(4, parsed.minor)
+        assertEquals(0, parsed.patch)
+        assertEquals(1, parsed.buildNumber)
+    }
 }

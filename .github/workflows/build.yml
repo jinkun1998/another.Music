@@ -72,13 +72,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           APK=$(ls app/build/outputs/apk/universalGms/release/*.apk | head -n 1)
-          VERSION=$(grep -oE 'versionName = "[0-9.]+' app/build.gradle.kts | grep -oE '[0-9.]+')
-          TAG="v${VERSION}-1"
+          VERSION=$(grep -oE 'versionName = "[^"]+' app/build.gradle.kts | cut -d'"' -f2)
+          TAG="v${VERSION}"
           gh release delete "$TAG" --yes --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
           git tag -d "$TAG" 2>/dev/null || true
           git push origin ":refs/tags/$TAG" 2>/dev/null || true
           gh release create "$TAG" "$APK" \
-            --title "anotherMusic Android v${VERSION}-1" \
+            --title "anotherMusic Android v${VERSION}" \
             --notes "Release APK for Android (Universal GMS):
           - Upstream sync: v${VERSION} (includes all latest Mochy-Music features).
           - Foldable/Tablet optimizations: bounded covers, adaptive 2-column search, clamped controls.

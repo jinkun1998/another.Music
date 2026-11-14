@@ -12,8 +12,8 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
-const val GithubOwner = "realidkroo"
-const val GithubRepo = "Mochy-Music"
+const val GithubOwner = "jinkun1998"
+const val GithubRepo = "another.Music"
 
 const val GithubProfileUrl = "https://github.com/$GithubOwner"
 const val GithubRepoUrl = "https://github.com/$GithubOwner/$GithubRepo"
@@ -68,7 +68,7 @@ data class FullVersion(
 }
 
 private val VersionRegex = Regex("""(\d+)\.(\d+)(?:\.(\d+))?(?:\.(\d+))?""")
-private val BuildNumberRegex = Regex("""(?:build#|\(#|#|\()(\d+)\)?""", RegexOption.IGNORE_CASE)
+private val BuildNumberRegex = Regex("""(?:build#|\(#|#|\(|-)(\d+)\)?""", RegexOption.IGNORE_CASE)
 
 fun parseFullVersion(text: String): FullVersion {
     val version = VersionRegex.find(text)?.groupValues
