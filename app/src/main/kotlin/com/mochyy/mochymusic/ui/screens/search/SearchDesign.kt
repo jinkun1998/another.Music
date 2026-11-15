@@ -30,6 +30,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -110,9 +111,9 @@ object SearchColors {
     fun page(pureBlack: Boolean): Color = Color.Black
 }
 
-val SearchCollapseEasing = CubicBezierEasing(0.57f, 0.53f, 0f, 1f)
+val SearchCollapseEasing = FastOutSlowInEasing
 
-const val SearchCollapseDurationMs = 900
+const val SearchCollapseDurationMs = 280
 
 /**
  * Same latch-and-settle collapse mechanics as [rememberCollapseProgress] but for a plain

@@ -46,7 +46,7 @@ class GlassState {
      * Every touch goes through the guarded helpers below, which cast internally.
      */
     var renderNode by mutableStateOf<Any?>(null)
-    var rootPosition by mutableStateOf(Offset.Zero)
+    var rootPosition: Offset = Offset.Zero
 }
 
 /*
@@ -407,6 +407,8 @@ internal fun DownscaledBlur(
     }
 }
 
+internal class OffsetHolder(var x: Float = 0f, var y: Float = 0f)
+
 @Composable
 fun GlassPillBackground(
     state: GlassState,
@@ -444,7 +446,7 @@ fun GlassPillBackground(
     progressiveRamp: Float = 1f,
     modifier: Modifier = Modifier
 ) {
-    var position by remember { mutableStateOf(Offset.Zero) }
+    val position = remember { OffsetHolder() }
 
     val (disableBlur) = rememberPreference(DisableBlurKey, defaultValue = false)
     val (blurStrengthPx) = rememberPreference(com.mochyy.mochymusic.constants.BlurStrengthPxKey, defaultValue = 25f)
@@ -474,7 +476,11 @@ fun GlassPillBackground(
                     Modifier.bleed { kotlin.math.ceil(radius()).toInt() }
                 } else Modifier
             )
-            .onGloballyPositioned { position = it.positionInWindow() },
+            .onGloballyPositioned {
+                val pos = it.positionInWindow()
+                position.x = pos.x
+                position.y = pos.y
+            },
     ) { fullSize ->
         if (foundationColor != null) {
             drawRect(color = foundationColor, size = fullSize)

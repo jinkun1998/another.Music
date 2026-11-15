@@ -265,23 +265,17 @@ private val TurntableDim = Color.Black.copy(alpha = 0.58f)
 private fun lerpF(start: Float, stop: Float, fraction: Float): Float =
     start + (stop - start) * fraction
 
-// a late-growing cover starts growing once the sheet is this far open
-private const val LateGrowFrom = 0.7f
+// ponytail: interpolate cover growth and travel continuously across 0..1; upgrade to physics curve when gesture tracker unified
+private fun coverGrowth(p: Float, growLate: Boolean): Float = p
 
-// how far the cover has grown at sheet progress p; a late one keeps its mini size until it's nearly in place
-private fun coverGrowth(p: Float, growLate: Boolean): Float =
-    if (growLate) smoothstep((p - LateGrowFrom) / (1f - LateGrowFrom)) else p
-
-// how far the cover's middle has travelled; a late one eases out, so it's almost there by the time it grows
-private fun coverTravel(p: Float, growLate: Boolean): Float =
-    if (growLate) 1f - (1f - p) * (1f - p) else p
+private fun coverTravel(p: Float, growLate: Boolean): Float = p
 
 private fun discWeight(
     progressProvider: () -> Float,
     lyricsProgressProvider: () -> Float,
 ): Float {
     // a record is never edge-to-edge, so it shows as its cover grows rather than while the thumbnail is still travelling
-    val expanded = ((coverGrowth(progressProvider(), growLate = true) - 0.55f) / 0.30f).coerceIn(0f, 1f)
+    val expanded = ((progressProvider() - 0.40f) / 0.40f).coerceIn(0f, 1f)
     val lyrics = ((lyricsProgressProvider() - 0.10f) / 0.40f).coerceIn(0f, 1f)
     return expanded * (1f - lyrics)
 }

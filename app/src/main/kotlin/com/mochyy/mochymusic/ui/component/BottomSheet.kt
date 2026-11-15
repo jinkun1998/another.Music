@@ -84,8 +84,8 @@ import kotlinx.coroutines.launch
 import kotlin.math.pow
 
 private val PlayerSheetAnimationSpec = spring<Dp>(
-    dampingRatio = 0.96f,
-    stiffness = 80f
+    dampingRatio = 0.90f,
+    stiffness = 350f
 )
 
 /**
@@ -108,7 +108,7 @@ private val SheetCloseTravel = 36.dp
 private val SheetOpenTravel = 36.dp
 
 // how quickly a sheet let go of still settles (the soft spring's own pace); a faster finger raises it
-private const val SettleOmega = 8.94f
+private const val SettleOmega = 18f
 private const val MaxSettleOmega = 42f
 
 /**

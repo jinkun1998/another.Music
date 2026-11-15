@@ -574,6 +574,7 @@ private fun HomeShell() {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     navController: NavController,
@@ -755,7 +756,7 @@ fun HomeScreen(
 
     val scope = rememberCoroutineScope()
 
-    val lazylistState = rememberLazyListState()
+    val lazylistState = rememberLazyListState(prefetchStrategy = remember { LazyListPrefetchStrategy(nestedPrefetchItemCount = 3) })
 
     val carouselHeightDp = com.mochyy.mochymusic.ui.component.heroHeight()
     val collapseDistancePx = with(LocalDensity.current) {
@@ -1797,7 +1798,7 @@ fun HomeScreen(
                     val isScrolled by remember { derivedStateOf { heroScrollProgress > 0.5f } }
                     val topBarProgress by animateFloatAsState(
                         targetValue = if (isScrolled) 1f else 0f,
-                        animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
+                        animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
                         label = "topBarProgress"
                     )
 
