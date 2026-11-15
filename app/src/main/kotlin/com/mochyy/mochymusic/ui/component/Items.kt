@@ -1160,8 +1160,10 @@ fun ItemThumbnail(
     ) {
         if (albumIndex == null) {
             // the box above already clips to the shape, a second clip here was just one more layer per cover
+            // ponytail: clamp list thumbnail decode to 320px; upgrade to dynamic density bucket when memory monitor added
+            val model = remember(thumbnailUrl) { thumbnailUrl?.resize(320, 320) }
             AsyncImage(
-                model = thumbnailUrl?.resize(544, 544),
+                model = model,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
@@ -1336,16 +1338,19 @@ fun PlaylistThumbnail(
         ) {
             placeHolder()
         }
-        1 -> AsyncImage(
-            model = thumbnails[0].resize(544, 544),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            placeholder = painterResource(R.drawable.queue_music),
-            error = painterResource(R.drawable.queue_music),
-            modifier = modifier
-                .size(size)
-                .clip(shape)
-        )
+        1 -> {
+            val model = remember(thumbnails) { thumbnails.firstOrNull()?.resize(320, 320) }
+            AsyncImage(
+                model = model,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                placeholder = painterResource(R.drawable.queue_music),
+                error = painterResource(R.drawable.queue_music),
+                modifier = modifier
+                    .size(size)
+                    .clip(shape)
+            )
+        }
         else -> Box(
             modifier = modifier
                 .size(size)
@@ -1357,8 +1362,10 @@ fun PlaylistThumbnail(
                 Alignment.BottomStart,
                 Alignment.BottomEnd
             ).fastForEachIndexed { index, alignment ->
+                val thumb = thumbnails.getOrNull(index)
+                val model = remember(thumb) { thumb?.resize(160, 160) }
                 AsyncImage(
-                    model = thumbnails.getOrNull(index)?.resize(544, 544),
+                    model = model,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     placeholder = painterResource(R.drawable.queue_music),

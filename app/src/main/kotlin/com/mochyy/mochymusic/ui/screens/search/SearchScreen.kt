@@ -30,6 +30,8 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListPrefetchStrategy
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -102,6 +104,7 @@ fun NavController.requestSearchFocus() {
         ?.savedStateHandle?.set(SearchFocusKey, true)
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SearchScreen(
     navController: NavController,
@@ -145,8 +148,8 @@ fun SearchScreen(
         if (active) suggestionViewModel.query.value = query.text
     }
 
-    val browseListState = rememberLazyListState()
-    val activeListState = rememberLazyListState()
+    val browseListState = rememberLazyListState(prefetchStrategy = remember { LazyListPrefetchStrategy(nestedPrefetchItemCount = 4) })
+    val activeListState = rememberLazyListState(prefetchStrategy = remember { LazyListPrefetchStrategy(nestedPrefetchItemCount = 4) })
     val glassState = remember { GlassState() }
 
     val collapse = rememberCollapseProgress(browseListState)

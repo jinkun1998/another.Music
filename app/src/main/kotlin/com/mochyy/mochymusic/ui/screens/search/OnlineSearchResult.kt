@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListPrefetchStrategy
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -116,6 +118,7 @@ private val SearchCategories = listOf(
     "Featured" to FILTER_FEATURED_PLAYLIST,
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OnlineSearchResult(
     navController: NavController,
@@ -144,7 +147,7 @@ fun OnlineSearchResult(
         mutableStateOf(TextFieldValue(viewModel.query, TextRange(viewModel.query.length)))
     }
 
-    val listState = rememberLazyListState()
+    val listState = rememberLazyListState(prefetchStrategy = remember { LazyListPrefetchStrategy(nestedPrefetchItemCount = 4) })
     val glassState = remember { GlassState() }
     val collapse = rememberCollapseProgress(listState)
     val progressProvider = remember(collapse) { { collapse.value } }

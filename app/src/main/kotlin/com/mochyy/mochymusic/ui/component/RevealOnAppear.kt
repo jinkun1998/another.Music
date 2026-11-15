@@ -42,16 +42,16 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.min
 
 private val RevealEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
-private const val BonesFadeOutMs = 280
-private const val RevealGapMs = 120
-private const val RevealFadeInMs = 520
-private val RevealSlideDistance = 20.dp
+private const val BonesFadeOutMs = 180
+private const val RevealGapMs = 60
+private const val RevealFadeInMs = 240
+private val RevealSlideDistance = 14.dp
 private const val BonesWaveMs = 2000
 
 // reveals that start together (a whole page of rows landing at once) go one after another
-private const val BurstWindowMs = 120L
-private const val BurstStepMs = 60
-private const val BurstMaxSteps = 6
+private const val BurstWindowMs = 60L
+private const val BurstStepMs = 30
+private const val BurstMaxSteps = 4
 
 /** colour of a loading bone, before the wave modulates it */
 val BoneColor = Color(0xFFD9D9D9).copy(alpha = 0.22f)
@@ -158,8 +158,10 @@ fun Modifier.revealOnAppear(
     val slidePx = with(LocalDensity.current) { RevealSlideDistance.toPx() }
     return graphicsLayer {
         val p = progress.value
-        alpha = p
-        translationY = (1f - p) * slidePx
+        if (p < 1f) {
+            alpha = p
+            translationY = (1f - p) * slidePx
+        }
     }
 }
 
