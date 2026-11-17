@@ -34,6 +34,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
 
     // App Behaviour
     @AppStorage("restoreLastState") private var restoreLastState: Bool = true
+    @AppStorage("pauseSearchHistory") private var pauseSearchHistory: Bool = false
 
     // Audio Lab (Equalizer, Crossfade, AutoMix)
     @AppStorage("eqEnabled") private var eqEnabled: Bool = false
@@ -231,6 +232,13 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
 
                 SettingsRow(icon: "clock.arrow.circlepath", title: "Restore Last Track", subtitle: "Prepares last played history item on startup") {
                     Toggle("", isOn: $restoreLastState)
+                        .toggleStyle(.switch)
+                }
+
+                Divider().background(Color.white.opacity(0.06))
+
+                SettingsRow(icon: "clock.badge.xmark", title: "Pause Search History", subtitle: "Do not save new searches while enabled") {
+                    Toggle("", isOn: $pauseSearchHistory)
                         .toggleStyle(.switch)
                 }
 

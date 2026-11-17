@@ -4,6 +4,7 @@ import AppKit
 @main
 @MainActor struct AnotherMusicApp: App {
     @StateObject private var player = AudioPlayerService.shared
+    @StateObject private var menuBar = MenuBarStatusItem.shared
 
     var body: some Scene {
         WindowGroup {
@@ -11,6 +12,10 @@ import AppKit
                 .environmentObject(player)
                 .preferredColorScheme(.dark)
                 .frame(minWidth: 1040, minHeight: 720)
+                .onAppear { setupMenuBarObserver() }
+                .onChange(of: player.isPlaying) { _, _ in updateMenuBar() }
+                .onChange(of: player.currentTrack?.id) { _, _ in updateMenuBar() }
+                .onChange(of: player.progress) { _, _ in updateMenuBar() }
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
@@ -41,6 +46,20 @@ import AppKit
             MenuBarController(player: player)
         }
         .menuBarExtraStyle(.window)
+    }
+
+    private func setupMenuBarObserver() {
+        updateMenuBar()
+    }
+
+    private func updateMenuBar() {
+        let track = player.currentTrack
+        menuBar.updateState(
+            isPlaying: player.isPlaying,
+            title: track?.title ?? "anotherMusic",
+            artist: track?.artist ?? "",
+            progress: player.progress
+        )
     }
 }
 
@@ -183,6 +202,8 @@ extension Notification.Name { static let gotoSearch = Notification.Name("gotoSea
                     transitionProgress: player.uiTransitionProgress,
                     isPlaying: player.isPlaying,
                     progress: player.progress,
+                    transitionMode: player.transitionMode,
+                    isEqEnabled: player.isEqEnabled,
                     onTogglePlay: { player.togglePlayPause() },
                     onNext: { player.next() },
                     onPrevious: { player.previous() },
@@ -192,7 +213,9 @@ extension Notification.Name { static let gotoSearch = Notification.Name("gotoSea
                                 isPlayerExpanded = true
                             }
                         }
-                    }
+                    },
+                    onToggleEq: { player.toggleEqualizer() },
+                    onCycleTransitionMode: { player.cycleTransitionMode() }
                 )
                 .offset(y: isPlayerExpanded ? 80 : 0)
                 .opacity(isPlayerExpanded ? 0.0 : 1.0)

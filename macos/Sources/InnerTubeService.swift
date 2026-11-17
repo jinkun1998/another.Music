@@ -238,9 +238,13 @@ public final class InnerTubeService: Sendable {
         return results
     }
 
-    public func search(query: String) async -> [SongItem] {
-        guard !query.trimmingCharacters(in: .whitespaces).isEmpty,
-              let request = makeWebRemixRequest(endpoint: "search", body: ["query": query]),
+    public func search(query: String, params: String? = nil) async -> [SongItem] {
+        guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
+        var body: [String: Any] = ["query": query]
+        if let params, !params.isEmpty {
+            body["params"] = params
+        }
+        guard let request = makeWebRemixRequest(endpoint: "search", body: body),
               let (data, response) = try? await session.data(for: request),
               (response as? HTTPURLResponse)?.statusCode == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -590,7 +594,12 @@ public final class InnerTubeService: Sendable {
             return (browseId, .album)
         case "MUSIC_PAGE_TYPE_PLAYLIST":
             return (browseId, .playlist)
+        case "MUSIC_PAGE_TYPE_ARTIST":
+            return (browseId, .artist)
         default:
+            if browseId.hasPrefix("UC") || browseId.hasPrefix("FEmusic_library_privately_owned_artist") {
+                return (browseId, .artist)
+            }
             return nil
         }
     }

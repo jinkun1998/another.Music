@@ -74,37 +74,77 @@ import AppKit
                     }
 
                     // Transition Mode Selector (AutoMix, Crossfade, Off)
-                    HStack(spacing: 6) {
-                        if player.isTransitioning {
-                            AnimatedTransitionIcon(mode: player.transitionMode, isTransitioning: true)
-                        } else {
-                            Image(systemName: player.transitionMode == .automix ? "wand.and.stars" : (player.transitionMode == .crossfade ? "waveform.badge.magnifyingglass" : "circle.slash"))
-                                .font(.system(size: 13, weight: .semibold))
+                    Menu {
+                        ForEach(TransitionMode.allCases, id: \.self) { mode in
+                            Button(action: {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                    player.setTransitionMode(mode)
+                                }
+                            }) {
+                                HStack {
+                                    Text(mode.rawValue)
+                                    if player.transitionMode == mode {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
                         }
-                        Text(player.transitionMode.rawValue)
+                    } label: {
+                        HStack(spacing: 6) {
+                            if player.isTransitioning {
+                                AnimatedTransitionIcon(mode: player.transitionMode, isTransitioning: true)
+                            } else {
+                                Image(systemName: player.transitionMode == .automix ? "wand.and.stars" : (player.transitionMode == .crossfade ? "waveform.badge.magnifyingglass" : "circle.slash"))
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            Text(player.transitionMode.rawValue)
+                                .font(.system(size: 12, weight: .semibold))
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.55))
+                        }
+                        .foregroundColor(player.transitionMode != .off ? .white : .white.opacity(0.60))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(
+                            player.transitionMode != .off ? Color.white.opacity(0.22) : Color.white.opacity(0.10)
+                        )
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule().stroke(
+                                player.transitionMode != .off ? Color.white.opacity(0.25) : Color.white.opacity(0.15),
+                                lineWidth: 1
+                            )
+                        )
+                        .contentShape(Capsule())
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+
+                    // Equalizer toggle
+                    HStack(spacing: 6) {
+                        Image(systemName: "equalizer")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Equalizer")
                             .font(.system(size: 12, weight: .semibold))
                     }
-                    .foregroundColor(player.transitionMode != .off ? .white : .white.opacity(0.60))
+                    .foregroundColor(player.isEqEnabled ? .white : .white.opacity(0.60))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 7)
                     .background(
-                        player.transitionMode != .off ? Color.white.opacity(0.22) : Color.white.opacity(0.10)
+                        player.isEqEnabled ? Color.white.opacity(0.20) : Color.white.opacity(0.10)
                     )
                     .clipShape(Capsule())
                     .overlay(
                         Capsule().stroke(
-                            player.transitionMode != .off ? Color.white.opacity(0.25) : Color.white.opacity(0.15),
+                            player.isEqEnabled ? Color.white.opacity(0.22) : Color.white.opacity(0.15),
                             lineWidth: 1
                         )
                     )
                     .contentShape(Capsule())
                     .onTapGesture {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                            switch player.transitionMode {
-                            case .automix: player.setTransitionMode(.crossfade)
-                            case .crossfade: player.setTransitionMode(.off)
-                            case .off: player.setTransitionMode(.automix)
-                            }
+                            player.toggleEqualizer()
                         }
                     }
 

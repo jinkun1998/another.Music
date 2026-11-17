@@ -264,4 +264,20 @@ final class AnotherMusicTests: XCTestCase {
         XCTAssertEqual(TurntableCanvas.calculateArmDropAngle(from: restDeg, to: grooveDeg, elapsed: 0.0, duration: dropDuration), restDeg, accuracy: 0.001)
         XCTAssertEqual(TurntableCanvas.calculateArmDropAngle(from: restDeg, to: grooveDeg, elapsed: dropDuration, duration: dropDuration), grooveDeg, accuracy: 0.001)
     }
+
+    func testSearchFiltersAndMediaKind() async {
+        XCTAssertNil(SearchFilterType.all.params)
+        XCTAssertEqual(SearchFilterType.songs.params, "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D")
+        XCTAssertEqual(SearchFilterType.videos.params, "EgWKAQIQAWoKEAkQChAFEAMQBA%3D%3D")
+        XCTAssertEqual(SearchFilterType.albums.params, "EgWKAQIYAWoKEAkQChAFEAMQBA%3D%3D")
+        XCTAssertEqual(SearchFilterType.artists.params, "EgWKAQIgAWoKEAkQChAFEAMQBA%3D%3D")
+        XCTAssertEqual(SearchFilterType.playlists.params, "EgeKAQQoAEABagoQAxAEEAoQCRAF")
+
+        let artistKind = MediaItemKind.artist
+        XCTAssertEqual(artistKind.rawValue, "artist")
+
+        let songs = await InnerTubeService.shared.search(query: "Coldplay", params: SearchFilterType.songs.params)
+        XCTAssertFalse(songs.isEmpty, "Filtered song search should return items")
+        XCTAssertEqual(songs.first?.kind, .song)
+    }
 }

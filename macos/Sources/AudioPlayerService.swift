@@ -145,6 +145,14 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         }
     }
 
+    public func cycleTransitionMode() {
+        switch transitionMode {
+        case .automix: setTransitionMode(.crossfade)
+        case .crossfade: setTransitionMode(.off)
+        case .off: setTransitionMode(.automix)
+        }
+    }
+
     public func restoreLastTrack() {
         guard currentTrack == nil, let last = LibraryStore.shared.history.first else { return }
         prepare(song: last, queue: LibraryStore.shared.history)

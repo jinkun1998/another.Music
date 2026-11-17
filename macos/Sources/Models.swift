@@ -4,6 +4,29 @@ public enum MediaItemKind: String, Codable, Sendable {
     case song
     case album
     case playlist
+    case artist
+}
+
+public enum SearchFilterType: String, CaseIterable, Identifiable, Sendable {
+    case all = "All"
+    case songs = "Songs"
+    case videos = "Videos"
+    case albums = "Albums"
+    case artists = "Artists"
+    case playlists = "Playlists"
+
+    public var id: String { rawValue }
+
+    public var params: String? {
+        switch self {
+        case .all: return nil
+        case .songs: return "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
+        case .videos: return "EgWKAQIQAWoKEAkQChAFEAMQBA%3D%3D"
+        case .albums: return "EgWKAQIYAWoKEAkQChAFEAMQBA%3D%3D"
+        case .artists: return "EgWKAQIgAWoKEAkQChAFEAMQBA%3D%3D"
+        case .playlists: return "EgeKAQQoAEABagoQAxAEEAoQCRAF"
+        }
+    }
 }
 
 public struct SongItem: Identifiable, Hashable, Codable, Sendable {
