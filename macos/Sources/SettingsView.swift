@@ -55,6 +55,12 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
 
     @State private var showingClearAlert: Bool = false
 
+    private var appVersionDisplay: String {
+        let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "8.4.1-beta.1"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "75"
+        return "Version \(ver) (build #\(build))"
+    }
+
     public init() {}
 
     public var body: some View {
@@ -410,7 +416,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                             .font(.system(size: 22, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
 
-                        Text("Version 1.0.0")
+                        Text(appVersionDisplay)
                             .font(.system(size: 13, weight: .medium, design: .monospaced))
                             .foregroundColor(.white.opacity(0.55))
 

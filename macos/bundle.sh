@@ -4,6 +4,19 @@ set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$DIR"
 
+GRADLE_FILE="$DIR/../app/build.gradle.kts"
+ANDROID_VERSION=$(grep -oE 'versionName = "[^"]+' "$GRADLE_FILE" | cut -d'"' -f2 | awk '{print $1}')
+ANDROID_BASE_VERSION=$(echo "$ANDROID_VERSION" | sed -E 's/-.*//')
+ANDROID_BUILD=$(grep -oE 'versionCode = [0-9]+' "$GRADLE_FILE" | awk '{print $3}')
+RELEASE_CHANNEL="${RELEASE_CHANNEL:-beta.1}"
+if [ -n "$RELEASE_CHANNEL" ]; then
+    APP_VERSION="${APP_VERSION:-${ANDROID_BASE_VERSION}-${RELEASE_CHANNEL}}"
+else
+    APP_VERSION="${APP_VERSION:-${ANDROID_VERSION}}"
+fi
+APP_BUILD="${APP_BUILD:-${ANDROID_BUILD:-1}}"
+echo "==> Target Version: ${APP_VERSION} (build ${APP_BUILD})"
+
 echo "==> Building native macOS binary (release)..."
 swift build -c release
 
@@ -29,7 +42,7 @@ cp Resources/icon.png "$ICONSET/icon_512x512@2x.png"
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 rm -rf "$ICONSET"
 
-cat << 'PLIST' > "$APP/Contents/Info.plist"
+cat << PLIST > "$APP/Contents/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -47,9 +60,9 @@ cat << 'PLIST' > "$APP/Contents/Info.plist"
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>${APP_VERSION}</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>${APP_BUILD}</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSHighResolutionCapable</key>
@@ -63,6 +76,8 @@ cat << 'PLIST' > "$APP/Contents/Info.plist"
 </plist>
 PLIST
 
+codesign --force --deep --sign - "$APP" 2>/dev/null || true
+
 echo "==> Bundle ready at: $APP"
 
 if [ "$1" == "install" ]; then
@@ -75,11 +90,15 @@ fi
 
 if [ "$1" == "dmg" ]; then
     STAGE="$DIR/build/dmg"
-    rm -rf "$STAGE" "$DIR/build/anotherMusic.dmg"; mkdir -p "$STAGE"
+    DMG_OUT="$DIR/build/anotherMusic.dmg"
+    VERSIONED_DMG="$DIR/build/anotherMusic-${APP_VERSION}-macos.dmg"
+    rm -rf "$STAGE" "$DMG_OUT" "$VERSIONED_DMG"; mkdir -p "$STAGE"
     cp -R "$APP" "$STAGE/"; ln -s /Applications "$STAGE/Applications"
-    hdiutil create -volname anotherMusic -srcfolder "$STAGE" -ov -format UDZO "$DIR/build/anotherMusic.dmg" >/dev/null
+    hdiutil create -volname "another.Music" -srcfolder "$STAGE" -ov -format UDZO "$DMG_OUT" >/dev/null
+    cp "$DMG_OUT" "$VERSIONED_DMG"
     rm -rf "$STAGE"
-    echo "==> DMG: $DIR/build/anotherMusic.dmg"
+    echo "==> DMG: $DMG_OUT"
+    echo "==> Versioned DMG: $VERSIONED_DMG"
 fi
 
 if [ "$1" == "run" ]; then
