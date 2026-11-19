@@ -87,12 +87,17 @@ public struct LyricLine: Identifiable, Equatable, Sendable {
     }
 }
 
-// ponytail: four time buckets cover standard day periods; add user name suffix when profile name setting exists
-public func timeGreeting(hour: Int = Calendar.current.component(.hour, from: Date())) -> String {
+// ponytail: four time buckets cover standard day periods with optional personalized user name suffix
+public func timeGreeting(hour: Int = Calendar.current.component(.hour, from: Date()), name: String? = nil) -> String {
+    let base: String
     switch hour {
-    case 5..<12: return "Good morning"
-    case 12..<17: return "Good afternoon"
-    case 17..<22: return "Good evening"
-    default: return "Good night"
+    case 5..<12: base = "Good morning"
+    case 12..<17: base = "Good afternoon"
+    case 17..<22: base = "Good evening"
+    default: base = "Good night"
     }
+    if let name = name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+        return "\(base), \(name)"
+    }
+    return base
 }

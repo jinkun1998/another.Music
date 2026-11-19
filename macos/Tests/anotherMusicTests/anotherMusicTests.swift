@@ -71,6 +71,9 @@ final class AnotherMusicTests: XCTestCase {
         XCTAssertEqual(timeGreeting(hour: 19), "Good evening")
         XCTAssertEqual(timeGreeting(hour: 23), "Good night")
         XCTAssertEqual(timeGreeting(hour: 2), "Good night")
+        XCTAssertEqual(timeGreeting(hour: 9, name: "Jin"), "Good morning, Jin")
+        XCTAssertEqual(timeGreeting(hour: 15, name: "Jin"), "Good afternoon, Jin")
+        XCTAssertEqual(timeGreeting(hour: 20, name: "  "), "Good evening")
     }
 
     func testSearchSuggestions() async throws {
@@ -208,14 +211,14 @@ final class AnotherMusicTests: XCTestCase {
     @MainActor
     func testSeekNearEndAdvancesQueue() {
         let p = AudioPlayerService.shared
-        let song1 = SongItem(id: "s1", title: "Song 1", artist: "Artist", duration: 200, kind: .song)
-        let song2 = SongItem(id: "s2", title: "Song 2", artist: "Artist", duration: 212, kind: .song)
-        p.prepare(song: song1, queue: [song1, song2])
-        XCTAssertEqual(p.currentTrack?.id, song1.id)
+        let trackA = SongItem(id: "s1", title: "Track A", artist: "Artist", duration: 200, kind: .song)
+        let trackB = SongItem(id: "s2", title: "Track B", artist: "Artist", duration: 212, kind: .song)
+        p.prepare(song: trackA, queue: [trackA, trackB])
+        XCTAssertEqual(p.currentTrack?.id, trackA.id)
         
-        // Seeking to end (99%) cleanly advances to song2
+        // Seeking to end (99%) cleanly advances to trackB
         p.seek(to: 0.99)
-        XCTAssertEqual(p.currentTrack?.id, song2.id, "Seek near end should cleanly advance to next song")
+        XCTAssertEqual(p.currentTrack?.id, trackB.id, "Seek near end should cleanly advance to next song")
     }
 
 

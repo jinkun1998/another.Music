@@ -3,6 +3,7 @@ import SwiftUI
 public struct HomeScreen: View {
     let onPlay: (SongItem, [SongItem]) -> Void
 
+    @ObservedObject private var library = LibraryStore.shared
     @State private var sections: [HomeSection] = []
     @State private var isLoading: Bool = true
 
@@ -18,7 +19,7 @@ public struct HomeScreen: View {
                         TimelineView(.everyMinute) { context in
                             let hour = Calendar.current.component(.hour, from: context.date)
                             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                Text(timeGreeting(hour: hour))
+                                Text(timeGreeting(hour: hour, name: library.username))
                                     .font(.system(size: 36, weight: .bold, design: .rounded))
                                     .tracking(-0.8)
                                     .foregroundStyle(
@@ -76,12 +77,6 @@ public struct HomeScreen: View {
             )
             self.sections = res
             self.isLoading = false
-            if AudioPlayerService.shared.currentTrack == nil,
-               let firstSong = res.first?.items.first(where: { $0.kind == .song }) {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
-                    AudioPlayerService.shared.prepare(song: firstSong, queue: res.first?.items ?? [firstSong])
-                }
-            }
         }
     }
 }

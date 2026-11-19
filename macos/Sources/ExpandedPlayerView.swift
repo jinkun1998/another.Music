@@ -7,9 +7,10 @@ import AppKit
     let onClose: () -> Void
 
     @ObservedObject private var library = LibraryStore.shared
+    @AppStorage("defaultPlayerStyle") private var defaultPlayerStyle: String = "Vinyl"
     @State private var lyrics: [LyricLine] = []
     @State private var isLoadingLyrics: Bool = false
-    @State private var useVinyl: Bool = true
+    private var useVinyl: Bool { defaultPlayerStyle == "Vinyl" }
     @State private var swipeMonitor = SwipeDismissMonitor()
     @State private var isSeeking: Bool = false
     @State private var seekProgress: Double = 0.0
@@ -53,98 +54,34 @@ import AppKit
 
                     Spacer()
 
-                    // Cover mode / Vinyl mode switcher
-                    HStack(spacing: 6) {
-                        Image(systemName: useVinyl ? "record.circle" : "square.stack.fill")
-                            .font(.system(size: 13))
-                        Text(useVinyl ? "Vinyl" : "Cover")
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 7)
-                    .background(Color.white.opacity(0.10))
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 1))
-                    .contentShape(Capsule())
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                            useVinyl.toggle()
-                        }
-                    }
-
                     // Transition Mode Selector (AutoMix, Crossfade, Off)
-                    Menu {
-                        ForEach(TransitionMode.allCases, id: \.self) { mode in
-                            Button(action: {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                                    player.setTransitionMode(mode)
-                                }
-                            }) {
-                                HStack {
-                                    Text(mode.rawValue)
-                                    if player.transitionMode == mode {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            if player.isTransitioning {
-                                AnimatedTransitionIcon(mode: player.transitionMode, isTransitioning: true)
-                            } else {
-                                Image(systemName: player.transitionMode == .automix ? "wand.and.stars" : (player.transitionMode == .crossfade ? "waveform.badge.magnifyingglass" : "circle.slash"))
-                                    .font(.system(size: 13, weight: .semibold))
-                            }
-                            Text(player.transitionMode.rawValue)
-                                .font(.system(size: 12, weight: .semibold))
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.55))
-                        }
-                        .foregroundColor(player.transitionMode != .off ? .white : .white.opacity(0.60))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .background(
-                            player.transitionMode != .off ? Color.white.opacity(0.22) : Color.white.opacity(0.10)
-                        )
-                        .clipShape(Capsule())
-                        .overlay(
-                            Capsule().stroke(
-                                player.transitionMode != .off ? Color.white.opacity(0.25) : Color.white.opacity(0.15),
-                                lineWidth: 1
-                            )
-                        )
-                        .contentShape(Capsule())
-                    }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
-
-                    // Equalizer toggle
                     HStack(spacing: 6) {
-                        Image(systemName: "equalizer")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("Equalizer")
+                        if player.isTransitioning {
+                            AnimatedTransitionIcon(mode: player.transitionMode, isTransitioning: true)
+                        } else {
+                            Image(systemName: player.transitionMode == .automix ? "wand.and.stars" : (player.transitionMode == .crossfade ? "waveform.badge.magnifyingglass" : "circle.slash"))
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        Text(player.transitionMode.rawValue)
                             .font(.system(size: 12, weight: .semibold))
                     }
-                    .foregroundColor(player.isEqEnabled ? .white : .white.opacity(0.60))
+                    .foregroundColor(player.transitionMode != .off ? .white : .white.opacity(0.60))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 7)
                     .background(
-                        player.isEqEnabled ? Color.white.opacity(0.20) : Color.white.opacity(0.10)
+                        player.transitionMode != .off ? Color.white.opacity(0.22) : Color.white.opacity(0.10)
                     )
                     .clipShape(Capsule())
                     .overlay(
                         Capsule().stroke(
-                            player.isEqEnabled ? Color.white.opacity(0.22) : Color.white.opacity(0.15),
+                            player.transitionMode != .off ? Color.white.opacity(0.25) : Color.white.opacity(0.15),
                             lineWidth: 1
                         )
                     )
                     .contentShape(Capsule())
                     .onTapGesture {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                            player.toggleEqualizer()
+                            player.cycleTransitionMode()
                         }
                     }
 

@@ -323,9 +323,17 @@ public final class AudioPlayerService: NSObject, ObservableObject {
     private func loadRadio(seed: SongItem) {
         radioTask?.cancel()
         radioTask = Task {
-            let radio = await InnerTubeService.shared.fetchRadio(videoId: seed.id)
+            let history = LibraryStore.shared.history
+            let liked = LibraryStore.shared.likedSongs
+            let existingIds = Set(self.queue.map(\.id))
+            let recommended = await InnerTubeService.shared.fetchSmartQueueRecommendations(
+                current: seed,
+                history: history,
+                liked: liked,
+                existingQueueIds: existingIds
+            )
             guard !Task.isCancelled else { return }
-            let newTracks = radio.filter { r in !self.queue.contains(where: { $0.id == r.id }) }
+            let newTracks = recommended.filter { r in !self.queue.contains(where: { $0.id == r.id }) }
             guard !newTracks.isEmpty else { return }
             self.queue.append(contentsOf: newTracks)
             self.originalQueue.append(contentsOf: newTracks)
@@ -932,8 +940,16 @@ public final class AudioPlayerService: NSObject, ObservableObject {
             play(song: queue[0])
         } else if isAutoplay, let current = currentTrack {
             Task {
-                let radio = await InnerTubeService.shared.fetchRadio(videoId: current.id)
-                let newTracks = radio.filter { r in !self.queue.contains(where: { $0.id == r.id }) }
+                let history = LibraryStore.shared.history
+                let liked = LibraryStore.shared.likedSongs
+                let existingIds = Set(self.queue.map(\.id))
+                let recommended = await InnerTubeService.shared.fetchSmartQueueRecommendations(
+                    current: current,
+                    history: history,
+                    liked: liked,
+                    existingQueueIds: existingIds
+                )
+                let newTracks = recommended.filter { r in !self.queue.contains(where: { $0.id == r.id }) }
                 if !newTracks.isEmpty {
                     self.queue.append(contentsOf: newTracks)
                     self.originalQueue.append(contentsOf: newTracks)

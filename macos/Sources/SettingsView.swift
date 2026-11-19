@@ -48,6 +48,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
     @AppStorage("crossfadeDuration") private var crossfadeDuration: Double = 5.0
     @AppStorage("automixEnabled") private var automixEnabled: Bool = true
     @AppStorage("audioQuality") private var audioQuality: String = "High"
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
 
     @ObservedObject private var player = AudioPlayerService.shared
     @ObservedObject private var library = LibraryStore.shared
@@ -169,10 +170,10 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
 
             SettingsGroupCard {
                 SettingsRow(icon: "record.circle", title: "Default Player Style", subtitle: "Initial view when maximizing song deck") {
-                    AppSegmentedPicker(
+                    LiquidGlassSegmentedPicker(
                         options: [
-                            ("Turntable", "Vinyl"),
-                            ("Cover", "Cover")
+                            (id: "Vinyl", title: "Turntable", icon: "record.circle"),
+                            (id: "Cover", title: "Cover Art", icon: "square.stack.fill")
                         ],
                         selection: $defaultPlayerStyle
                     )
@@ -422,6 +423,15 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                     Spacer()
                 }
                 .padding(.vertical, 8)
+            }
+
+            SettingsGroupCard {
+                SettingsRow(icon: "sparkles", title: "Setup Wizard", subtitle: "Replay introductory onboarding experience") {
+                    Button("Replay Onboarding") {
+                        hasCompletedOnboarding = false
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
         }
     }

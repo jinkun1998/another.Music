@@ -7,14 +7,10 @@ import SwiftUI
     var transitionProgress: Double = 0.0
     let isPlaying: Bool
     let progress: Double
-    let transitionMode: TransitionMode
-    let isEqEnabled: Bool
     let onTogglePlay: () -> Void
     let onNext: () -> Void
     let onPrevious: () -> Void
     let onExpandPlayer: () -> Void
-    let onToggleEq: () -> Void
-    let onCycleTransitionMode: () -> Void
 
     private let tabs = [
         ("Home", "house.fill"),
@@ -113,40 +109,6 @@ import SwiftUI
                             .contentShape(Rectangle())
                             .onTapGesture { onNext() }
                     }
-
-                    // 1px divider
-                    Rectangle()
-                        .fill(Color.white.opacity(0.15))
-                        .frame(width: 1, height: 26)
-                        .padding(.horizontal, 6)
-
-                    // Quick Actions: EQ + Transition Mode
-                    HStack(spacing: 8) {
-                        // Equalizer toggle
-                        Button(action: onToggleEq) {
-                            Image(systemName: "equalizer")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(isEqEnabled ? .white : .white.opacity(0.55))
-                                .frame(width: 28, height: 28)
-                                .background(isEqEnabled ? Color.white.opacity(0.18) : Color.white.opacity(0.08))
-                                .clipShape(Circle())
-                                .overlay(Circle().stroke(Color.white.opacity(isEqEnabled ? 0.25 : 0.12), lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-
-                        // Transition Mode cycle (AutoMix → Crossfade → Off)
-                        Button(action: onCycleTransitionMode) {
-                            Image(systemName: transitionMode == .automix ? "wand.and.stars" : (transitionMode == .crossfade ? "waveform.badge.magnifyingglass" : "circle.slash"))
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(transitionMode != .off ? .white : .white.opacity(0.55))
-                                .frame(width: 28, height: 28)
-                                .background(transitionMode != .off ? Color.white.opacity(0.18) : Color.white.opacity(0.08))
-                                .clipShape(Circle())
-                                .overlay(Circle().stroke(Color.white.opacity(transitionMode != .off ? 0.25 : 0.12), lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.horizontal, 4)
 
                     // 1px divider
                     Rectangle()

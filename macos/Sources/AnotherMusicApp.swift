@@ -3,22 +3,50 @@ import AppKit
 
 @main
 @MainActor struct AnotherMusicApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var player = AudioPlayerService.shared
-    @StateObject private var menuBar = MenuBarStatusItem.shared
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
 
     var body: some Scene {
         WindowGroup {
-            MainContentView()
-                .environmentObject(player)
-                .preferredColorScheme(.dark)
-                .frame(minWidth: 1040, minHeight: 720)
-                .onAppear { setupMenuBarObserver() }
-                .onChange(of: player.isPlaying) { _, _ in updateMenuBar() }
-                .onChange(of: player.currentTrack?.id) { _, _ in updateMenuBar() }
-                .onChange(of: player.progress) { _, _ in updateMenuBar() }
+            ZStack {
+                MainContentView()
+                    .environmentObject(player)
+
+                if !hasCompletedOnboarding {
+                    OnboardingView(onComplete: {
+                        withAnimation(.spring(response: 0.55, dampingFraction: 0.86)) {
+                            hasCompletedOnboarding = true
+                        }
+                    })
+                    .transition(.opacity.combined(with: .scale(scale: 1.03)))
+                    .zIndex(100)
+                }
+            }
+            .preferredColorScheme(.dark)
+            .frame(minWidth: 1040, minHeight: 720)
+            .background(
+                WindowAccessor { window in
+                    AppDelegate.shared.configureMainWindow(window)
+                }
+            )
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("New Window") {
+                    AppDelegate.shared.reopenMainWindow()
+                }
+                .keyboardShortcut("n", modifiers: .command)
+            }
+
+            CommandGroup(after: .windowArrangement) {
+                Button("another.Music") {
+                    AppDelegate.shared.reopenMainWindow()
+                }
+                .keyboardShortcut("0", modifiers: .command)
+            }
+
             CommandMenu("Playback") {
                 Button("Play/Pause") { player.togglePlayPause() }.keyboardShortcut("p", modifiers: .command)
                 Button("Seek Back 5s") { player.seekBy(seconds: -5) }.keyboardShortcut(.leftArrow, modifiers: .command)
@@ -41,25 +69,6 @@ import AppKit
             SettingsView()
                 .preferredColorScheme(.dark)
         }
-
-        MenuBarExtra("anotherMusic", systemImage: player.isPlaying ? "play.circle.fill" : "music.note") {
-            MenuBarController(player: player)
-        }
-        .menuBarExtraStyle(.window)
-    }
-
-    private func setupMenuBarObserver() {
-        updateMenuBar()
-    }
-
-    private func updateMenuBar() {
-        let track = player.currentTrack
-        menuBar.updateState(
-            isPlaying: player.isPlaying,
-            title: track?.title ?? "anotherMusic",
-            artist: track?.artist ?? "",
-            progress: player.progress
-        )
     }
 }
 
@@ -202,8 +211,6 @@ extension Notification.Name { static let gotoSearch = Notification.Name("gotoSea
                     transitionProgress: player.uiTransitionProgress,
                     isPlaying: player.isPlaying,
                     progress: player.progress,
-                    transitionMode: player.transitionMode,
-                    isEqEnabled: player.isEqEnabled,
                     onTogglePlay: { player.togglePlayPause() },
                     onNext: { player.next() },
                     onPrevious: { player.previous() },
@@ -213,9 +220,7 @@ extension Notification.Name { static let gotoSearch = Notification.Name("gotoSea
                                 isPlayerExpanded = true
                             }
                         }
-                    },
-                    onToggleEq: { player.toggleEqualizer() },
-                    onCycleTransitionMode: { player.cycleTransitionMode() }
+                    }
                 )
                 .offset(y: isPlayerExpanded ? 80 : 0)
                 .opacity(isPlayerExpanded ? 0.0 : 1.0)
@@ -240,6 +245,147 @@ extension Notification.Name { static let gotoSearch = Notification.Name("gotoSea
                 ))
                 .zIndex(10)
             }
+        }
+    }
+}
+
+// MARK: - App Delegate & Window Lifecycle Management
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+    static private(set) var shared: AppDelegate!
+    var mainWindow: NSWindow?
+    private var isTerminating = false
+
+    override init() {
+        super.init()
+        AppDelegate.shared = self
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            reopenMainWindow()
+            return false
+        }
+        return true
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        let hasVisible = NSApp.windows.contains(where: { $0.isVisible && !($0 is NSPanel) })
+        if !hasVisible {
+            reopenMainWindow()
+        }
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        isTerminating = true
+        return .terminateNow
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        isTerminating = true
+    }
+
+    func configureMainWindow(_ window: NSWindow) {
+        self.mainWindow = window
+        window.delegate = self
+        window.isReleasedWhenClosed = false
+
+        // Intercept close button to hide (orderOut) instead of destroy
+        if let closeBtn = window.standardWindowButton(.closeButton) {
+            closeBtn.target = self
+            closeBtn.action = #selector(handleCloseButton)
+        }
+    }
+
+    @objc func handleCloseButton() {
+        mainWindow?.orderOut(nil)
+    }
+
+    func closeMainWindow() {
+        mainWindow?.orderOut(nil)
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if isTerminating {
+            return true
+        }
+        if sender === mainWindow {
+            sender.orderOut(nil)
+            return false
+        }
+        return true
+    }
+
+    func reopenMainWindow() {
+        if let window = mainWindow {
+            if window.isMiniaturized {
+                window.deminiaturize(nil)
+            }
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        for candidate in NSApp.windows where candidate.canBecomeMain && !(candidate is NSPanel) {
+            configureMainWindow(candidate)
+            if candidate.isMiniaturized {
+                candidate.deminiaturize(nil)
+            }
+            candidate.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        // Trigger system menu item to create a fresh window if none exists
+        if let mainMenu = NSApp.mainMenu {
+            for item in mainMenu.items {
+                if let submenu = item.submenu {
+                    for subitem in submenu.items {
+                        if subitem.title == "New Window" || subitem.title == "New" || (subitem.keyEquivalent == "n" && subitem.keyEquivalentModifierMask == .command) {
+                            if let action = subitem.action {
+                                NSApp.sendAction(action, to: subitem.target, from: subitem)
+                                NSApp.activate(ignoringOtherApps: true)
+                                return
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+// MARK: - Window Accessor
+private struct WindowAccessor: NSViewRepresentable {
+    let onWindow: (NSWindow) -> Void
+
+    func makeNSView(context: Context) -> WindowAccessorView {
+        let view = WindowAccessorView()
+        view.onWindow = onWindow
+        return view
+    }
+
+    func updateNSView(_ nsView: WindowAccessorView, context: Context) {
+        nsView.onWindow = onWindow
+        if let window = nsView.window {
+            onWindow(window)
+        }
+    }
+}
+
+private final class WindowAccessorView: NSView {
+    var onWindow: ((NSWindow) -> Void)?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let window = self.window {
+            onWindow?(window)
         }
     }
 }

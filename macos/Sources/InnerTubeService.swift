@@ -375,6 +375,102 @@ public final class InnerTubeService: Sendable {
         return results
     }
 
+    // MARK: - Smart Queue Recommendations (AI & History-based)
+    public func fetchSmartQueueRecommendations(
+        current: SongItem,
+        history: [SongItem],
+        liked: [SongItem],
+        existingQueueIds: Set<String>
+    ) async -> [SongItem] {
+        var artistWeights: [String: Double] = [:]
+        for (idx, song) in history.prefix(50).enumerated() {
+            let key = song.artist.lowercased()
+            let decay = exp(-Double(idx) / 12.0)
+            artistWeights[key, default: 0.0] += decay
+        }
+        for song in liked.suffix(50) {
+            let key = song.artist.lowercased()
+            artistWeights[key, default: 0.0] += 1.6
+        }
+
+        let curArtistKey = current.artist.lowercased()
+        let secondarySeed = (history + liked).first {
+            $0.id != current.id && $0.artist.lowercased() != curArtistKey && $0.kind == .song
+        }
+
+        async let primaryCandidates = fetchRadio(videoId: current.id)
+        async let secondaryCandidates: [SongItem] = {
+            if let sec = secondarySeed {
+                return await self.fetchRadio(videoId: sec.id)
+            }
+            return []
+        }()
+
+        let (primary, secondary) = await (primaryCandidates, secondaryCandidates)
+
+        let recentHistoryIds = Set(history.prefix(20).map(\.id))
+        var candidateScores: [(song: SongItem, score: Double)] = []
+        var seenIds = Set<String>()
+
+        for (idx, song) in primary.enumerated() {
+            guard song.id != current.id,
+                  !existingQueueIds.contains(song.id),
+                  !recentHistoryIds.contains(song.id),
+                  seenIds.insert(song.id).inserted else { continue }
+            var score = 100.0 - Double(idx) * 1.5
+            let aKey = song.artist.lowercased()
+            if let w = artistWeights[aKey], w > 0 {
+                score += min(w * 8.0, 35.0)
+            }
+            if liked.contains(where: { $0.id == song.id }) {
+                score += 25.0
+            }
+            candidateScores.append((song, score))
+        }
+
+        for (idx, song) in secondary.enumerated() {
+            guard song.id != current.id,
+                  !existingQueueIds.contains(song.id),
+                  !recentHistoryIds.contains(song.id),
+                  seenIds.insert(song.id).inserted else { continue }
+            var score = 75.0 - Double(idx) * 1.5
+            let aKey = song.artist.lowercased()
+            if let w = artistWeights[aKey], w > 0 {
+                score += min(w * 8.0, 35.0)
+            }
+            if liked.contains(where: { $0.id == song.id }) {
+                score += 25.0
+            }
+            candidateScores.append((song, score))
+        }
+
+        candidateScores.sort { $0.score > $1.score }
+
+        var results: [SongItem] = []
+        var artistCounts: [String: Int] = [:]
+
+        for entry in candidateScores {
+            let aKey = entry.song.artist.lowercased()
+            let count = artistCounts[aKey, default: 0]
+            if count < 2 {
+                results.append(entry.song)
+                artistCounts[aKey] = count + 1
+            }
+            if results.count >= 25 { break }
+        }
+
+        if results.count < 6 {
+            for song in primary {
+                if song.id != current.id && !existingQueueIds.contains(song.id) && !results.contains(where: { $0.id == song.id }) {
+                    results.append(song)
+                    if results.count >= 20 { break }
+                }
+            }
+        }
+
+        return results
+    }
+
     public func resolveStream(videoId: String) async -> (url: String, durationMs: Int64)? {
         guard let url = URL(string: "https://music.youtube.com/youtubei/v1/player") else { return nil }
         let visitor = await ensureVisitorData()
