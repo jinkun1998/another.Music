@@ -393,7 +393,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
     // MARK: - About (Clean, Minimal, using App Icon)
     private var aboutSection: some View {
         VStack(alignment: .leading, spacing: 20) {
-            sectionHeader(title: "About", subtitle: "another.Music")
+            sectionHeader(title: "About", subtitle: "anotherMusic")
 
             SettingsGroupCard {
                 HStack(spacing: 20) {
@@ -412,7 +412,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("another.Music")
+                        Text("anotherMusic")
                             .font(.system(size: 22, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
 

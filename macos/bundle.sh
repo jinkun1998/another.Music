@@ -66,7 +66,7 @@ cat << PLIST > "$APP/Contents/Info.plist"
     <key>CFBundleName</key>
     <string>anotherMusic</string>
     <key>CFBundleDisplayName</key>
-    <string>another.Music</string>
+    <string>anotherMusic</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -104,7 +104,7 @@ if [ "$1" == "dmg" ]; then
     VERSIONED_DMG="$DIR/build/anotherMusic-${APP_VERSION}-macos.dmg"
     rm -rf "$STAGE" "$DMG_OUT" "$VERSIONED_DMG"; mkdir -p "$STAGE"
     cp -R "$APP" "$STAGE/"; ln -s /Applications "$STAGE/Applications"
-    hdiutil create -volname "another.Music" -srcfolder "$STAGE" -ov -format UDZO "$DMG_OUT" >/dev/null
+    hdiutil create -volname "anotherMusic" -srcfolder "$STAGE" -ov -format UDZO "$DMG_OUT" >/dev/null
     cp "$DMG_OUT" "$VERSIONED_DMG"
     rm -rf "$STAGE"
     echo "==> DMG: $DMG_OUT"

@@ -41,7 +41,7 @@ import AppKit
             }
 
             CommandGroup(after: .windowArrangement) {
-                Button("another.Music") {
+                Button("anotherMusic") {
                     AppDelegate.shared.reopenMainWindow()
                 }
                 .keyboardShortcut("0", modifiers: .command)

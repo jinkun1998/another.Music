@@ -157,7 +157,7 @@ public struct OnboardingView: View {
             }
 
             VStack(spacing: 12) {
-                Text("Welcome to another.Music")
+                Text("Welcome to anotherMusic")
                     .font(.system(size: 34, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
                     .multilineTextAlignment(.center)
@@ -437,7 +437,7 @@ public struct OnboardingView: View {
                         Circle()
                             .fill(Color.white.opacity(0.9))
                             .frame(width: 7, height: 7)
-                        Text("another.Music ID")
+                        Text("anotherMusic ID")
                             .font(.system(size: 11, weight: .bold, design: .rounded))
                             .tracking(0.5)
                             .foregroundColor(.white.opacity(0.9))
