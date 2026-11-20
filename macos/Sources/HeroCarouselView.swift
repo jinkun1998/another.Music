@@ -160,13 +160,23 @@ public final class GachaSounds {
 // MARK: - Gacha Die View
 public struct GachaDieView: View {
     public let spinning: Bool
-    @State private var rotationDegrees: Double = 0
 
     public init(spinning: Bool) {
         self.spinning = spinning
     }
 
     public var body: some View {
+        TimelineView(.animation(paused: !spinning)) { timeline in
+            let angle: Double = spinning
+                ? (timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 0.55) / 0.55) * 360.0
+                : 0.0
+
+            dieShape
+                .rotationEffect(.degrees(angle))
+        }
+    }
+
+    private var dieShape: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 4.5, style: .continuous)
                 .fill(Color.white)
@@ -186,26 +196,14 @@ public struct GachaDieView: View {
             Circle().fill(pipColor).frame(width: pipSize, height: pipSize)
                 .offset(x: offset, y: offset)
         }
-        .rotationEffect(.degrees(rotationDegrees))
-        .onChange(of: spinning) { _, isSpinning in
-            if isSpinning {
-                withAnimation(.linear(duration: 0.55).repeatForever(autoreverses: false)) {
-                    rotationDegrees += 360
-                }
-            } else {
-                let nearest = round(rotationDegrees / 90.0) * 90.0
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
-                    rotationDegrees = nearest
-                }
-            }
-        }
     }
 }
 
 // MARK: - Gacha Card View
 public struct GachaCardView: View {
     public let candidates: [SongItem]
-    public let isCurrentlyPlayingResult: Bool
+    public let isAudioPlaying: Bool
+    public let currentPlayingTrackId: String?
     public let onPlayWonTrack: (SongItem, [SongItem]) -> Void
     public let onRollingStateChanged: ((Bool) -> Void)?
 
@@ -219,12 +217,14 @@ public struct GachaCardView: View {
 
     public init(
         candidates: [SongItem],
-        isCurrentlyPlayingResult: Bool = false,
+        isAudioPlaying: Bool = false,
+        currentPlayingTrackId: String? = nil,
         onPlayWonTrack: @escaping (SongItem, [SongItem]) -> Void,
         onRollingStateChanged: ((Bool) -> Void)? = nil
     ) {
         self.candidates = candidates
-        self.isCurrentlyPlayingResult = isCurrentlyPlayingResult
+        self.isAudioPlaying = isAudioPlaying
+        self.currentPlayingTrackId = currentPlayingTrackId
         self.onPlayWonTrack = onPlayWonTrack
         self.onRollingStateChanged = onRollingStateChanged
     }
@@ -243,24 +243,17 @@ public struct GachaCardView: View {
             coralPointerIndicator()
 
             // Text & Pill on bottom-left
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 Spacer()
 
-                // Badge label
-                HStack(spacing: 6) {
-                    Text(gachaLabelText.uppercased())
-                        .font(.system(size: 11, weight: .bold))
-                        .tracking(0.9)
-                        .foregroundColor(.white.opacity(0.85))
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(Color.black.opacity(0.35))
-                .clipShape(Capsule())
+                // Android Mochy style HeroLabelLine
+                Text(gachaLabelText)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Color.white.opacity(0.70))
 
                 // Title
                 Text(gachaTitleText)
-                    .font(.system(size: 28, weight: .heavy, design: .rounded))
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
                     .lineLimit(2)
                     .shadow(color: Color.black.opacity(0.6), radius: 8, x: 0, y: 3)
@@ -272,7 +265,7 @@ public struct GachaCardView: View {
                         .lineLimit(1)
                 }
 
-                Spacer().frame(height: 6)
+                Spacer().frame(height: 5)
 
                 // Action Pill: roll!!
                 Button(action: { startRoll() }) {
@@ -280,16 +273,15 @@ public struct GachaCardView: View {
                         GachaDieView(spinning: isRolling)
 
                         Text(isRolling ? "rolling!!" : "roll!!")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(Color(red: 0.16, green: 0.16, blue: 0.16))
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(Color(red: 0.18, green: 0.18, blue: 0.18))
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, 16)
+                    .frame(height: 34)
                     .background(
                         Capsule()
-                            .fill(Color.white.opacity(isRolling ? 0.70 : 0.94))
+                            .fill(Color.white.opacity(isRolling ? 0.45 : 0.68))
                     )
-                    .shadow(color: Color.black.opacity(0.3), radius: 10, x: 0, y: 4)
                     .scaleEffect(isHovered && !isRolling ? 1.04 : 1.0)
                 }
                 .buttonStyle(.plain)
@@ -299,13 +291,22 @@ public struct GachaCardView: View {
             .padding(.bottom, 26)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.40), radius: 20, x: 0, y: 8)
+        .shadow(color: Color.black.opacity(0.35), radius: 18, x: 0, y: 8)
         .onHover { isHovered = $0 }
+        .onDisappear {
+            rollTimer?.invalidate()
+            rollTimer = nil
+        }
+    }
+
+    private var isCurrentlyPlayingResult: Bool {
+        isAudioPlaying && landedSong != nil && currentPlayingTrackId == landedSong?.id
     }
 
     private var gachaLabelText: String {
@@ -476,16 +477,20 @@ public struct GachaCardView: View {
         GachaSounds.shared.prepare()
 
         let count = candidates.count
+        guard count > 0 else { return }
         let targetIndex = Int.random(in: 0..<count)
         let fullRevolutions = 3
-        let targetReel = reelPosition + Double(fullRevolutions * count) + Double(targetIndex)
+        let currentNormalized = reelPosition.truncatingRemainder(dividingBy: Double(count))
+        var stepDiff = Double(targetIndex) - currentNormalized
+        if stepDiff <= 0 { stepDiff += Double(count) }
+        let targetReel = reelPosition + Double(fullRevolutions * count) + stepDiff
         let duration: Double = 4.0
         let startTime = ProcessInfo.processInfo.systemUptime
         let startReel = reelPosition
         var lastCrossedIndex = Int(floor(startReel))
 
         rollTimer?.invalidate()
-        rollTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { timer in
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { t in
             let elapsed = ProcessInfo.processInfo.systemUptime - startTime
             let progress = min(1.0, elapsed / duration)
 
@@ -505,7 +510,7 @@ public struct GachaCardView: View {
             }
 
             if progress >= 1.0 {
-                timer.invalidate()
+                t.invalidate()
                 self.rollTimer = nil
                 self.reelPosition = targetReel
                 self.isRolling = false
@@ -529,6 +534,8 @@ public struct GachaCardView: View {
                 self.onPlayWonTrack(wonSong, self.candidates)
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        self.rollTimer = timer
     }
 
     // Cubic bezier ease-out implementation
@@ -595,11 +602,13 @@ public struct HeroCardView: View {
                     content: { image in
                         image.resizable()
                             .aspectRatio(contentMode: .fill)
+                            .clipped()
                     },
                     placeholder: {
                         Color(red: 0.12, green: 0.12, blue: 0.16)
                     }
                 )
+                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
             } else {
                 LinearGradient(
                     colors: [Color(red: 0.18, green: 0.20, blue: 0.28), Color.black],
@@ -631,12 +640,16 @@ public struct HeroCardView: View {
             )
 
             // Foreground Content
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 Spacer()
 
-                // Seed Label Badge
+                // Seed Label Line matching Android HeroLabelLine
                 let label = card.label(isPlaying: isPlaying)
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    Text(label.text)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Color.white.opacity(0.70))
+
                     if let seedCover = label.coverUrl, !seedCover.isEmpty {
                         CachedAsyncImage(
                             urlString: seedCover.ytResize(width: 80, height: 80),
@@ -644,38 +657,29 @@ public struct HeroCardView: View {
                                 if label.roundCover {
                                     img.resizable()
                                         .aspectRatio(contentMode: .fill)
-                                        .frame(width: 20, height: 20)
+                                        .frame(width: 18, height: 18)
                                         .clipShape(Circle())
                                 } else {
                                     img.resizable()
                                         .aspectRatio(contentMode: .fill)
-                                        .frame(width: 20, height: 20)
-                                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                                        .frame(width: 18, height: 18)
+                                        .clipShape(RoundedRectangle(cornerRadius: 4.5, style: .continuous))
                                 }
                             },
                             placeholder: {
                                 Color.white.opacity(0.2)
-                                    .frame(width: 20, height: 20)
+                                    .frame(width: 18, height: 18)
                             }
                         )
                     }
 
-                    Text(label.text.uppercased())
-                        .font(.system(size: 11, weight: .bold))
-                        .tracking(0.8)
-                        .foregroundColor(.white.opacity(0.85))
-
                     if let subject = label.subject, !subject.isEmpty {
                         Text(subject)
-                            .font(.system(size: 11, weight: .heavy))
-                            .foregroundColor(.white)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(Color.white.opacity(0.92))
                             .lineLimit(1)
                     }
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Color.black.opacity(0.40))
-                .clipShape(Capsule())
 
                 // Main Title
                 Text(card.title)
@@ -693,9 +697,9 @@ public struct HeroCardView: View {
                         .shadow(color: Color.black.opacity(0.6), radius: 6, x: 0, y: 2)
                 }
 
-                Spacer().frame(height: 6)
+                Spacer().frame(height: 5)
 
-                // Pill Action Button
+                // Pill Action Button matching Android Mochy HeroPill
                 Button(action: {
                     handlePillClick()
                 }) {
@@ -704,17 +708,16 @@ public struct HeroCardView: View {
                             .font(.system(size: 13, weight: .bold))
 
                         Text(pillText)
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.system(size: 14, weight: .bold))
                     }
-                    .foregroundColor(Color(red: 0.16, green: 0.16, blue: 0.16))
-                    .padding(.horizontal, 22)
-                    .padding(.vertical, 10)
+                    .foregroundColor(Color(red: 0.18, green: 0.18, blue: 0.18))
+                    .padding(.horizontal, 20)
+                    .frame(height: 34)
                     .background(
                         Capsule()
-                            .fill(Color.white.opacity(0.94))
+                            .fill(Color.white.opacity(0.68))
                     )
-                    .shadow(color: Color.black.opacity(0.35), radius: 10, x: 0, y: 4)
-                    .scaleEffect(isPillHovered ? 1.05 : 1.0)
+                    .scaleEffect(isPillHovered ? 1.04 : 1.0)
                 }
                 .buttonStyle(.plain)
                 .onHover { isPillHovered = $0 }
@@ -723,12 +726,13 @@ public struct HeroCardView: View {
             .padding(.bottom, 26)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.40), radius: 20, x: 0, y: 8)
+        .shadow(color: Color.black.opacity(0.35), radius: 18, x: 0, y: 8)
         .onHover { isHovered = $0 }
     }
 
@@ -823,7 +827,8 @@ public struct HeroCarouselView: View {
                                             if card.kind == .gacha {
                                                 GachaCardView(
                                                     candidates: gachaCandidates,
-                                                    isCurrentlyPlayingResult: isAudioPlaying && currentPlayingTrackId == card.songItem?.id,
+                                                    isAudioPlaying: isAudioPlaying,
+                                                    currentPlayingTrackId: currentPlayingTrackId,
                                                     onPlayWonTrack: { wonSong, pool in
                                                         onPlaySong(wonSong, pool)
                                                     },
@@ -975,7 +980,8 @@ public struct HeroCarouselView: View {
     private func startAutoAdvance(proxy: ScrollViewProxy) {
         stopAutoAdvance()
         autoAdvanceTimer = Timer.scheduledTimer(withTimeInterval: 5.5, repeats: true) { _ in
-            guard !isCarouselHovered, !isGachaRolling, cards.count > 1 else { return }
+            // Keep card still while music is actively playing, gacha is rolling, or user is hovering
+            guard !isCarouselHovered, !isGachaRolling, !isAudioPlaying, cards.count > 1 else { return }
             advanceNext(proxy: proxy)
         }
     }
