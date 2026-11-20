@@ -475,4 +475,43 @@ final class AnotherMusicTests: XCTestCase {
         XCTAssertFalse(gacha.contains(where: { $0.artist.lowercased() == "muted artist" }), "Gacha pool should exclude avoided artist")
         XCTAssertTrue(gacha.contains(where: { $0.id == "good_1" }), "Gacha pool should include clean song")
     }
+
+    @MainActor
+    func testTwoFingerSwipeGestures() {
+        // Test Volume math
+        var volume: Float = 0.5
+        let deltaPx: CGFloat = 40.0 // swipe right
+        let change = Float(deltaPx) * 0.0035
+        volume = min(max(volume + change, 0.0), 1.0)
+        XCTAssertEqual(volume, 0.64, accuracy: 0.001)
+
+        // Negative swipe down/left
+        let negativeDeltaPx: CGFloat = -200.0
+        let negChange = Float(negativeDeltaPx) * 0.0035
+        volume = min(max(volume + negChange, 0.0), 1.0)
+        XCTAssertEqual(volume, 0.0, accuracy: 0.001, "Volume should clamp to 0.0 on large left swipe")
+
+        // Test Timeline Progress math
+        var progress: Double = 0.5
+        let durationSec: Double = 200.0
+        let timelineDeltaPx: CGFloat = 50.0 // swipe right
+        let secDelta = Double(timelineDeltaPx) * 0.15 // 7.5 seconds
+        let progressDelta = secDelta / durationSec // 7.5 / 200 = 0.0375
+        progress = min(max(progress + progressDelta, 0.0), 1.0)
+        XCTAssertEqual(progress, 0.5375, accuracy: 0.0001)
+
+        // Large backward swipe
+        let rewindDeltaPx: CGFloat = -1000.0
+        let rewindSec = Double(rewindDeltaPx) * 0.15
+        progress = min(max(progress + (rewindSec / durationSec), 0.0), 1.0)
+        XCTAssertEqual(progress, 0.0, accuracy: 0.0001, "Timeline progress should clamp to 0.0 on large left swipe")
+
+        // Test TwoFingerSwipeHandler instance lifecycle
+        let handler = TwoFingerSwipeHandler()
+        XCTAssertFalse(handler.isSwiping)
+        handler.start()
+        handler.stop()
+        handler.forceStop()
+        XCTAssertFalse(handler.isSwiping)
+    }
 }

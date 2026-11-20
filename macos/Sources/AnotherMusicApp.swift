@@ -253,6 +253,9 @@ extension Notification.Name { static let gotoSearch = Notification.Name("gotoSea
                                 isPlayerExpanded = true
                             }
                         }
+                    },
+                    onSeek: { ratio in
+                        player.seek(to: ratio)
                     }
                 )
                 .offset(y: isPlayerExpanded ? 80 : 0)

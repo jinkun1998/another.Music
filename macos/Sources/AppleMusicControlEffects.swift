@@ -224,6 +224,92 @@ public struct AppleMusicTogglePillButton: View {
     }
 }
 
+/// Reusable trackpad 2-finger swipe / scroll wheel coordinator for smooth sliding of volume and timeline
+@MainActor
+public final class TwoFingerSwipeHandler: ObservableObject {
+    @Published public private(set) var isSwiping: Bool = false
+    private var monitor: Any?
+    private var debounceEndTask: Task<Void, Never>? = nil
+
+    public var onSwipeTick: ((_ delta: CGFloat, _ phase: NSEvent.Phase, _ isPrecise: Bool) -> Void)?
+    public var onSwipeEnd: (() -> Void)?
+
+    public init() {}
+
+    public func start() {
+        guard monitor == nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            guard let self, let window = event.window, window == NSApp.keyWindow || window.isKeyWindow else {
+                return event
+            }
+
+            let isPrecise = event.hasPreciseScrollingDeltas
+            var dx = isPrecise ? event.scrollingDeltaX : (event.deltaX * 12.0)
+            var dy = isPrecise ? event.scrollingDeltaY : (event.deltaY * 12.0)
+
+            // When natural scrolling is off on trackpads, invert so physical gesture matches visual direction
+            if isPrecise && !event.isDirectionInvertedFromDevice {
+                dx = -dx
+                dy = -dy
+            }
+
+            // Filter out idle noise
+            guard abs(dx) > 0.05 || abs(dy) > 0.05 else { return event }
+
+            // Take the dominant movement (supports both horizontal & vertical trackpad swiping)
+            let effectiveDelta = abs(dx) >= abs(dy) ? dx : dy
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.isSwiping = true
+                self.onSwipeTick?(effectiveDelta, event.phase, isPrecise)
+
+                self.debounceEndTask?.cancel()
+
+                if event.phase == .ended || event.phase == .cancelled {
+                    self.isSwiping = false
+                    self.onSwipeEnd?()
+                } else if !isPrecise || event.phase == [] {
+                    self.debounceEndTask = Task { @MainActor [weak self] in
+                        try? await Task.sleep(nanoseconds: 280_000_000)
+                        guard let self, !Task.isCancelled else { return }
+                        self.isSwiping = false
+                        self.onSwipeEnd?()
+                    }
+                }
+            }
+
+            return nil // Consume scroll event: avoids scrolling the page or triggering dismiss
+        }
+    }
+
+    public func stop() {
+        guard !isSwiping else { return }
+        debounceEndTask?.cancel()
+        debounceEndTask = nil
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+            self.monitor = nil
+        }
+    }
+
+    public func forceStop() {
+        isSwiping = false
+        debounceEndTask?.cancel()
+        debounceEndTask = nil
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+            self.monitor = nil
+        }
+    }
+
+    deinit {
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+        }
+    }
+}
+
 /// Apple Music dynamic expanding scrubber with resting line, expansion on hover/scrub, and animated thumb.
 public struct AppleMusicScrubber: View {
     public let progress: Double
@@ -236,6 +322,9 @@ public struct AppleMusicScrubber: View {
 
     @State private var isHovered: Bool = false
     @State private var showRemainingTime: Bool = false
+    @State private var isSwiping: Bool = false
+    @State private var swipeProgress: Double = 0.0
+    @StateObject private var swipeHandler = TwoFingerSwipeHandler()
 
     public init(
         progress: Double,
@@ -260,10 +349,13 @@ public struct AppleMusicScrubber: View {
     }
 
     private var isExpanded: Bool {
-        isHovered || isSeeking
+        isHovered || isSeeking || isSwiping
     }
 
     public var body: some View {
+        let displayP = isSwiping ? swipeProgress : activeProgress
+        let displaySec = isSwiping ? (swipeProgress * durationSec) : positionSec
+
         VStack(spacing: 7) {
             GeometryReader { geo in
                 let w = geo.size.width
@@ -293,7 +385,7 @@ public struct AppleMusicScrubber: View {
                                 endPoint: .trailing
                             )
                         )
-                        .frame(width: max(w * CGFloat(activeProgress), 0), height: trackHeight)
+                        .frame(width: max(w * CGFloat(displayP), 0), height: trackHeight)
 
                     // Floating thumb knob with drop shadow
                     Circle()
@@ -301,7 +393,7 @@ public struct AppleMusicScrubber: View {
                         .frame(width: thumbSize, height: thumbSize)
                         .overlay(Circle().stroke(Color.white.opacity(0.4), lineWidth: 0.5))
                         .shadow(color: .black.opacity(isExpanded ? 0.35 : 0.15), radius: isExpanded ? 5 : 2, y: 1.5)
-                        .offset(x: max(min(w * CGFloat(activeProgress) - thumbSize / 2, w - thumbSize), 0))
+                        .offset(x: max(min(w * CGFloat(displayP) - thumbSize / 2, w - thumbSize), 0))
                         .opacity(isExpanded ? 1.0 : 0.0)
                 }
                 .frame(height: 22)
@@ -323,22 +415,17 @@ public struct AppleMusicScrubber: View {
                 )
             }
             .frame(height: 22)
-            .onHover { hovering in
-                withAnimation(.spring(response: 0.24, dampingFraction: 0.78)) {
-                    isHovered = hovering
-                }
-            }
 
             // Time labels
             HStack {
-                Text(formatTime(positionSec))
-                    .font(.system(size: 11, weight: isSeeking ? .bold : .medium))
+                Text(formatTime(displaySec))
+                    .font(.system(size: 11, weight: (isSeeking || isSwiping) ? .bold : .medium))
                     .monospacedDigit()
-                    .foregroundColor(isSeeking ? .white : .white.opacity(0.55))
+                    .foregroundColor((isSeeking || isSwiping) ? .white : .white.opacity(0.55))
 
                 Spacer()
 
-                Text(showRemainingTime ? "-\(formatTime(max(durationSec - positionSec, 0)))" : formatTime(durationSec))
+                Text(showRemainingTime ? "-\(formatTime(max(durationSec - displaySec, 0)))" : formatTime(durationSec))
                     .font(.system(size: 11, weight: .medium))
                     .monospacedDigit()
                     .foregroundColor(.white.opacity(0.55))
@@ -350,7 +437,64 @@ public struct AppleMusicScrubber: View {
                     }
             }
         }
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.78)) {
+                isHovered = hovering
+            }
+            if hovering {
+                swipeHandler.start()
+            } else {
+                swipeHandler.stop()
+            }
+        }
+        .onAppear {
+            setupSwipeHandlers()
+        }
+        .onChange(of: progress) { _, newP in
+            if !isSwiping {
+                swipeProgress = newP
+            }
+            setupSwipeHandlers()
+        }
+        .onChange(of: durationSec) { _, _ in
+            setupSwipeHandlers()
+        }
+        .onDisappear {
+            swipeHandler.forceStop()
+        }
         .animation(.spring(response: 0.24, dampingFraction: 0.78), value: isExpanded)
+    }
+
+    private func setupSwipeHandlers() {
+        swipeHandler.onSwipeTick = { delta, phase, isPrecise in
+            if phase == .began || (!isSwiping && phase == []) {
+                isSwiping = true
+                swipeProgress = progress
+                onSeekStart(swipeProgress)
+            }
+
+            let secPerPixel: Double = 0.15
+            let progressDelta: Double
+            if durationSec > 5.0 {
+                let secDelta = Double(delta) * secPerPixel
+                progressDelta = secDelta / durationSec
+            } else {
+                progressDelta = Double(delta) * 0.0015
+            }
+
+            let next = min(max(swipeProgress + progressDelta, 0.0), 1.0)
+            swipeProgress = next
+            onSeekChange(next)
+        }
+
+        swipeHandler.onSwipeEnd = {
+            isSwiping = false
+            onSeekEnd(swipeProgress)
+            if !isHovered {
+                swipeHandler.forceStop()
+            }
+        }
     }
 
     private func formatTime(_ sec: Double) -> String {
@@ -369,9 +513,11 @@ public struct AppleMusicVolumeControl: View {
 
     @State private var isHovered: Bool = false
     @State private var isDragging: Bool = false
+    @State private var isSwiping: Bool = false
     @State private var preMuteVolume: Float = 0.8
     @State private var isVolDownHovered: Bool = false
     @State private var isVolUpHovered: Bool = false
+    @StateObject private var swipeHandler = TwoFingerSwipeHandler()
 
     public init(
         volume: Float,
@@ -382,7 +528,7 @@ public struct AppleMusicVolumeControl: View {
     }
 
     private var isExpanded: Bool {
-        isHovered || isDragging
+        isHovered || isDragging || isSwiping
     }
 
     private var leftIconName: String {
@@ -474,11 +620,6 @@ public struct AppleMusicVolumeControl: View {
                 )
             }
             .frame(width: 140, height: 20)
-            .onHover { hovering in
-                withAnimation(.spring(response: 0.24, dampingFraction: 0.8)) {
-                    isHovered = hovering
-                }
-            }
 
             // Right speaker: jump to 100% volume
             Button(action: {
@@ -502,6 +643,51 @@ public struct AppleMusicVolumeControl: View {
             .buttonStyle(AppleMusicPressButtonStyle(pressedScale: 0.85))
             .onHover { isVolUpHovered = $0 }
         }
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.8)) {
+                isHovered = hovering
+            }
+            if hovering {
+                swipeHandler.start()
+            } else {
+                swipeHandler.stop()
+            }
+        }
+        .onAppear {
+            setupSwipeHandlers()
+        }
+        .onChange(of: volume) { _, _ in
+            setupSwipeHandlers()
+        }
+        .onDisappear {
+            swipeHandler.forceStop()
+        }
         .animation(.spring(response: 0.24, dampingFraction: 0.8), value: isExpanded)
+    }
+
+    private func setupSwipeHandlers() {
+        swipeHandler.onSwipeTick = { delta, phase, isPrecise in
+            if phase == .began || (!isSwiping && phase == []) {
+                isSwiping = true
+            }
+
+            let deltaVolume: Float
+            if isPrecise {
+                deltaVolume = Float(delta) * 0.0035
+            } else {
+                deltaVolume = Float(delta > 0 ? 0.04 : -0.04)
+            }
+
+            let newVol = min(max(volume + deltaVolume, 0.0), 1.0)
+            onVolumeChange(newVol)
+        }
+
+        swipeHandler.onSwipeEnd = {
+            isSwiping = false
+            if !isHovered {
+                swipeHandler.forceStop()
+            }
+        }
     }
 }
