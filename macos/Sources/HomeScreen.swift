@@ -44,17 +44,23 @@ public struct HomeScreen: View {
                         }
 
                         // Top Hero Carousel with Gacha Card
+                        let avoidSongIds = library.avoidSongIds()
+                        let avoidArtists = library.avoidArtists()
                         let heroCards = buildHeroCards(
                             history: library.history,
                             liked: library.likedSongs,
                             sections: sections,
                             currentTrack: player.currentTrack,
-                            isPlaying: player.isPlaying
+                            isPlaying: player.isPlaying,
+                            avoidSongIds: avoidSongIds,
+                            avoidArtists: avoidArtists
                         )
                         let gachaCandidates = buildGachaCandidates(
                             history: library.history,
                             liked: library.likedSongs,
-                            sections: sections
+                            sections: sections,
+                            avoidSongIds: avoidSongIds,
+                            avoidArtists: avoidArtists
                         )
 
                         if !heroCards.isEmpty {
@@ -119,7 +125,9 @@ public struct HomeScreen: View {
         .task {
             let res = await InnerTubeService.shared.fetchHome(
                 history: LibraryStore.shared.history,
-                liked: LibraryStore.shared.likedSongs
+                liked: LibraryStore.shared.likedSongs,
+                avoidSongIds: LibraryStore.shared.avoidSongIds(),
+                avoidArtists: LibraryStore.shared.avoidArtists()
             )
             self.sections = res
             self.isLoading = false
@@ -187,6 +195,20 @@ public struct TrackRow: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .contentShape(Rectangle())
         .onTapGesture(perform: onPlay)
+        .contextMenu {
+            Button(LibraryStore.shared.isLiked(song) ? "Unlike" : "Like") {
+                LibraryStore.shared.toggleLike(song)
+            }
+            Divider()
+            Button("Don't recommend this song") {
+                LibraryStore.shared.blockSong(id: song.id)
+            }
+            if !song.artist.isEmpty && song.artist != "YouTube Music" {
+                Button("Don't recommend \(song.artist)") {
+                    LibraryStore.shared.blockArtist(song.artist)
+                }
+            }
+        }
     }
 }
 
@@ -223,5 +245,21 @@ private struct SongCard: View {
         }
         .contentShape(Rectangle())
         .onTapGesture(perform: onPlay)
+        .contextMenu {
+            if item.kind == .song {
+                Button(LibraryStore.shared.isLiked(item) ? "Unlike" : "Like") {
+                    LibraryStore.shared.toggleLike(item)
+                }
+                Divider()
+                Button("Don't recommend this song") {
+                    LibraryStore.shared.blockSong(id: item.id)
+                }
+                if !item.artist.isEmpty && item.artist != "YouTube Music" {
+                    Button("Don't recommend \(item.artist)") {
+                        LibraryStore.shared.blockArtist(item.artist)
+                    }
+                }
+            }
+        }
     }
 }

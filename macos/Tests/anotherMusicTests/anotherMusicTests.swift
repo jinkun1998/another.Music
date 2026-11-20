@@ -410,4 +410,69 @@ final class AnotherMusicTests: XCTestCase {
         XCTAssertEqual(release.dmgAsset?.name, "anotherMusic-8.4.2-macos.dmg")
         XCTAssertEqual(release.dmgAsset?.browserDownloadUrl, "https://example.com/anotherMusic.dmg")
     }
+
+    @MainActor
+    func testSkipTrackingAndAvoidanceSets() {
+        let store = LibraryStore.shared
+        let uniqueArtist = "TestArtist_\(UUID().uuidString.prefix(6))"
+        let uniqueLower = uniqueArtist.lowercased()
+        let songId1 = "skip_song_\(UUID().uuidString)"
+        let song1 = SongItem(id: songId1, title: "Song 1", artist: uniqueArtist, kind: .song)
+        let song2 = SongItem(id: "skip_song_\(UUID().uuidString)", title: "Song 2", artist: uniqueArtist, kind: .song)
+        let song3 = SongItem(id: "skip_song_\(UUID().uuidString)", title: "Song 3", artist: uniqueArtist, kind: .song)
+
+        store.recordSkip(song1)
+        XCTAssertTrue(store.avoidSongIds().contains(songId1), "Single skip should add song to avoid list")
+        XCTAssertFalse(store.avoidArtists().contains(uniqueLower), "Artist with 1 skip should not be avoided yet")
+
+        store.recordSkip(song2)
+        store.recordSkip(song3)
+        XCTAssertTrue(store.avoidArtists().contains(uniqueLower), "Artist with 3 skips should be avoided")
+
+        // Test explicit blocking
+        let blockSongId = "explicit_blocked_\(UUID().uuidString)"
+        let blockArtistName = "Explicit Bad Artist \(UUID().uuidString.prefix(4))"
+        store.blockSong(id: blockSongId)
+        store.blockArtist(blockArtistName)
+        XCTAssertTrue(store.avoidSongIds().contains(blockSongId))
+        XCTAssertTrue(store.avoidArtists().contains(blockArtistName.lowercased()))
+
+        // Cleanup
+        store.unblockSong(id: blockSongId)
+        store.unblockArtist(blockArtistName)
+        XCTAssertFalse(store.avoidSongIds().contains(blockSongId))
+    }
+
+    @MainActor
+    func testHeroCardsAndGachaAvoidBlockedContent() {
+        let goodSong = SongItem(id: "good_1", title: "Good Song", artist: "Good Artist", thumbnail: "https://example.com/good.jpg", kind: .song)
+        let badSong = SongItem(id: "bad_1", title: "Bad Song", artist: "Bad Artist", thumbnail: "https://example.com/bad.jpg", kind: .song)
+        let badArtistSong = SongItem(id: "bad_2", title: "Another Bad", artist: "Muted Artist", thumbnail: "https://example.com/bad2.jpg", kind: .song)
+
+        let section = HomeSection(title: "Section", items: [goodSong, badSong, badArtistSong])
+
+        let cards = buildHeroCards(
+            history: [goodSong],
+            liked: [badSong],
+            sections: [section],
+            currentTrack: nil,
+            isPlaying: false,
+            avoidSongIds: ["bad_1"],
+            avoidArtists: ["muted artist"]
+        )
+
+        XCTAssertFalse(cards.contains(where: { $0.songItem?.id == "bad_1" }), "Hero cards should not contain avoided song")
+        XCTAssertFalse(cards.contains(where: { $0.songItem?.artist.lowercased() == "muted artist" }), "Hero cards should not contain avoided artist")
+
+        let gacha = buildGachaCandidates(
+            history: [goodSong, badSong],
+            liked: [badArtistSong],
+            sections: [section],
+            avoidSongIds: ["bad_1"],
+            avoidArtists: ["muted artist"]
+        )
+        XCTAssertFalse(gacha.contains(where: { $0.id == "bad_1" }), "Gacha pool should exclude avoided song")
+        XCTAssertFalse(gacha.contains(where: { $0.artist.lowercased() == "muted artist" }), "Gacha pool should exclude avoided artist")
+        XCTAssertTrue(gacha.contains(where: { $0.id == "good_1" }), "Gacha pool should include clean song")
+    }
 }

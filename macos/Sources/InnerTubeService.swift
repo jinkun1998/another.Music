@@ -97,7 +97,12 @@ public final class InnerTubeService: Sendable {
         return result
     }
 
-    public func fetchHome(history: [SongItem] = [], liked: [SongItem] = []) async -> [HomeSection] {
+    public func fetchHome(
+        history: [SongItem] = [],
+        liked: [SongItem] = [],
+        avoidSongIds: Set<String> = [],
+        avoidArtists: Set<String> = []
+    ) async -> [HomeSection] {
         let visitor = await ensureVisitorData()
 
         async let ytHomeTask: [HomeSection] = {
@@ -134,7 +139,12 @@ public final class InnerTubeService: Sendable {
             return sections
         }()
 
-        async let personalTask: [HomeSection] = buildPersonalizedShelves(history: history, liked: liked)
+        async let personalTask: [HomeSection] = buildPersonalizedShelves(
+            history: history,
+            liked: liked,
+            avoidSongIds: avoidSongIds,
+            avoidArtists: avoidArtists
+        )
 
         let (ytSections, personalSections) = await (ytHomeTask, personalTask)
 
@@ -148,16 +158,23 @@ public final class InnerTubeService: Sendable {
         return combined
     }
 
-    private func buildPersonalizedShelves(history: [SongItem], liked: [SongItem]) async -> [HomeSection] {
+    private func buildPersonalizedShelves(
+        history: [SongItem],
+        liked: [SongItem],
+        avoidSongIds: Set<String> = [],
+        avoidArtists: Set<String> = []
+    ) async -> [HomeSection] {
         var scores: [String: Double] = [:]
         var songMap: [String: SongItem] = [:]
 
         for (idx, song) in history.prefix(60).enumerated() where song.kind == .song {
+            guard !avoidSongIds.contains(song.id), !avoidArtists.contains(song.artist.lowercased()) else { continue }
             let weight = exp(-Double(idx) / 14.0)
             scores[song.id, default: 0] += weight
             songMap[song.id] = song
         }
         for song in liked.suffix(50) where song.kind == .song {
+            guard !avoidSongIds.contains(song.id), !avoidArtists.contains(song.artist.lowercased()) else { continue }
             scores[song.id, default: 0] += 1.5
             songMap[song.id] = song
         }
@@ -166,38 +183,91 @@ public final class InnerTubeService: Sendable {
         guard !ranked.isEmpty else { return [] }
 
         var result: [HomeSection] = []
-        let listenAgain = Array(ranked.prefix(12))
+        let listenAgain = Array(ranked.filter {
+            !avoidSongIds.contains($0.id) && !avoidArtists.contains($0.artist.lowercased())
+        }.prefix(12))
         if listenAgain.count >= 4 {
             result.append(HomeSection(title: "Listen again", items: listenAgain, isTrackGrid: false))
         }
 
-        var seeds: [SongItem] = []
-        var seenArtists = Set<String>()
-        for s in ranked {
-            let key = s.artist.lowercased()
-            if seenArtists.insert(key).inserted {
-                seeds.append(s)
-                if seeds.count >= 3 { break }
+        // Collect highest affinity song per distinct artist
+        var artistBestSong: [String: (song: SongItem, weight: Double)] = [:]
+        for (songId, score) in scores {
+            guard let song = songMap[songId] else { continue }
+            let key = song.artist.lowercased()
+            guard !avoidArtists.contains(key) else { continue }
+            if let existing = artistBestSong[key] {
+                if score > existing.weight {
+                    artistBestSong[key] = (song, score)
+                }
+            } else {
+                artistBestSong[key] = (song, score)
             }
         }
 
-        let heardIds = Set(history.prefix(30).map(\.id))
+        // Sample up to 3 distinct artist seeds via Efraimidis-Spirakis weighted sampling
+        let topArtistCandidates = artistBestSong.values.sorted { $0.weight > $1.weight }.prefix(12)
+        let seeds: [SongItem] = weightedSample(
+            candidates: topArtistCandidates.map { ($0.song, $0.weight) },
+            count: 3
+        )
+
+        let profileHeardIds = Set((history + liked).map(\.id))
         await withTaskGroup(of: (Int, HomeSection?).self) { group in
             for (idx, seed) in seeds.enumerated() {
                 group.addTask {
                     let radio = await self.fetchRadio(videoId: seed.id)
-                    var artistCounts: [String: Int] = [:]
-                    let filtered = radio.filter { item in
-                        guard item.id != seed.id && !heardIds.contains(item.id) else { return false }
-                        let aKey = item.artist.lowercased()
-                        let c = (artistCounts[aKey] ?? 0) + 1
-                        artistCounts[aKey] = c
-                        return c <= 2
+                    let usable = radio.filter { item in
+                        item.id != seed.id &&
+                        !avoidSongIds.contains(item.id) &&
+                        !avoidArtists.contains(item.artist.lowercased())
                     }
-                    guard filtered.count >= 4 else { return (idx, nil) }
+
+                    var heard: [SongItem] = []
+                    var unheard: [SongItem] = []
+                    for s in usable {
+                        if profileHeardIds.contains(s.id) {
+                            heard.append(s)
+                        } else {
+                            unheard.append(s)
+                        }
+                    }
+
+                    // 75% discovery (unheard) / 25% familiar blend
+                    let targetLimit = 12
+                    let familiarCount = min(3, heard.count)
+                    let freshCount = targetLimit - familiarCount
+
+                    var mixed: [SongItem] = []
+                    mixed.append(contentsOf: unheard.shuffled().prefix(freshCount))
+                    mixed.append(contentsOf: heard.shuffled().prefix(familiarCount))
+
+                    // Backfill if needed
+                    if mixed.count < targetLimit {
+                        let curIds = Set(mixed.map(\.id))
+                        for rem in (unheard + heard).shuffled() where !curIds.contains(rem.id) {
+                            mixed.append(rem)
+                            if mixed.count >= targetLimit { break }
+                        }
+                    }
+
+                    // Enforce per-artist diversity cap (max 2 songs per artist)
+                    var artistCounts: [String: Int] = [:]
+                    var finalItems: [SongItem] = []
+                    for song in mixed.shuffled() {
+                        let aKey = song.artist.lowercased()
+                        let c = artistCounts[aKey, default: 0]
+                        if c < 2 {
+                            finalItems.append(song)
+                            artistCounts[aKey] = c + 1
+                        }
+                        if finalItems.count >= targetLimit { break }
+                    }
+
+                    guard finalItems.count >= 4 else { return (idx, nil) }
                     let isArtistShelf = idx == 1 && seed.artist != "YouTube Music"
                     let title = isArtistShelf ? "More like \(seed.artist)" : "Because you like \(seed.title)"
-                    return (idx, HomeSection(title: title, items: Array(filtered.prefix(12)), isTrackGrid: false))
+                    return (idx, HomeSection(title: title, items: finalItems, isTrackGrid: false))
                 }
             }
             var shelves: [(Int, HomeSection)] = []
@@ -209,6 +279,17 @@ public final class InnerTubeService: Sendable {
         }
 
         return result
+    }
+
+    /// Efraimidis-Spirakis weighted sampling without replacement (key = ln(U) / weight)
+    private func weightedSample<T>(candidates: [(item: T, weight: Double)], count: Int) -> [T] {
+        guard !candidates.isEmpty, count > 0 else { return [] }
+        let scored = candidates.map { entry -> (item: T, key: Double) in
+            let u = max(Double.random(in: 1e-9...1.0), 1e-9)
+            let key = log(u) / max(entry.weight, 1e-6)
+            return (entry.item, key)
+        }
+        return scored.sorted { $0.key > $1.key }.prefix(count).map(\.item)
     }
 
     public func getSearchSuggestions(query: String) async -> [String] {
@@ -380,22 +461,27 @@ public final class InnerTubeService: Sendable {
         current: SongItem,
         history: [SongItem],
         liked: [SongItem],
-        existingQueueIds: Set<String>
+        existingQueueIds: Set<String>,
+        avoidSongIds: Set<String> = [],
+        avoidArtists: Set<String> = []
     ) async -> [SongItem] {
         var artistWeights: [String: Double] = [:]
         for (idx, song) in history.prefix(50).enumerated() {
             let key = song.artist.lowercased()
+            guard !avoidArtists.contains(key) else { continue }
             let decay = exp(-Double(idx) / 12.0)
             artistWeights[key, default: 0.0] += decay
         }
         for song in liked.suffix(50) {
             let key = song.artist.lowercased()
+            guard !avoidArtists.contains(key) else { continue }
             artistWeights[key, default: 0.0] += 1.6
         }
 
         let curArtistKey = current.artist.lowercased()
         let secondarySeed = (history + liked).first {
-            $0.id != current.id && $0.artist.lowercased() != curArtistKey && $0.kind == .song
+            $0.id != current.id && $0.artist.lowercased() != curArtistKey && $0.kind == .song &&
+            !avoidSongIds.contains($0.id) && !avoidArtists.contains($0.artist.lowercased())
         }
 
         async let primaryCandidates = fetchRadio(videoId: current.id)
@@ -416,6 +502,8 @@ public final class InnerTubeService: Sendable {
             guard song.id != current.id,
                   !existingQueueIds.contains(song.id),
                   !recentHistoryIds.contains(song.id),
+                  !avoidSongIds.contains(song.id),
+                  !avoidArtists.contains(song.artist.lowercased()),
                   seenIds.insert(song.id).inserted else { continue }
             var score = 100.0 - Double(idx) * 1.5
             let aKey = song.artist.lowercased()
@@ -432,6 +520,8 @@ public final class InnerTubeService: Sendable {
             guard song.id != current.id,
                   !existingQueueIds.contains(song.id),
                   !recentHistoryIds.contains(song.id),
+                  !avoidSongIds.contains(song.id),
+                  !avoidArtists.contains(song.artist.lowercased()),
                   seenIds.insert(song.id).inserted else { continue }
             var score = 75.0 - Double(idx) * 1.5
             let aKey = song.artist.lowercased()
@@ -461,7 +551,11 @@ public final class InnerTubeService: Sendable {
 
         if results.count < 6 {
             for song in primary {
-                if song.id != current.id && !existingQueueIds.contains(song.id) && !results.contains(where: { $0.id == song.id }) {
+                if song.id != current.id &&
+                   !existingQueueIds.contains(song.id) &&
+                   !avoidSongIds.contains(song.id) &&
+                   !avoidArtists.contains(song.artist.lowercased()) &&
+                   !results.contains(where: { $0.id == song.id }) {
                     results.append(song)
                     if results.count >= 20 { break }
                 }

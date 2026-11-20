@@ -1100,13 +1100,15 @@ public func buildHeroCards(
     liked: [SongItem],
     sections: [HomeSection],
     currentTrack: SongItem?,
-    isPlaying: Bool
+    isPlaying: Bool,
+    avoidSongIds: Set<String> = [],
+    avoidArtists: Set<String> = []
 ) -> [HeroCardModel] {
     var result: [HeroCardModel] = []
     var seenMediaIds = Set<String>()
 
     // 1. Keep Listening / Now Playing / Continue (Card 0)
-    if let current = currentTrack {
+    if let current = currentTrack, !avoidSongIds.contains(current.id), !avoidArtists.contains(current.artist.lowercased()) {
         seenMediaIds.insert(current.id)
         result.append(
             HeroCardModel(
@@ -1119,7 +1121,7 @@ public func buildHeroCards(
                 initialLabel: HeroLabel(text: isPlaying ? "Now playing" : "Continue")
             )
         )
-    } else if let lastPlayed = history.first {
+    } else if let lastPlayed = history.first(where: { !avoidSongIds.contains($0.id) && !avoidArtists.contains($0.artist.lowercased()) }) {
         seenMediaIds.insert(lastPlayed.id)
         result.append(
             HeroCardModel(
@@ -1135,7 +1137,13 @@ public func buildHeroCards(
     }
 
     // 2. Gacha Card ("Gacha here! / Random plays") placed right after the first card
-    let gachaCandidatesPool = buildGachaCandidates(history: history, liked: liked, sections: sections)
+    let gachaCandidatesPool = buildGachaCandidates(
+        history: history,
+        liked: liked,
+        sections: sections,
+        avoidSongIds: avoidSongIds,
+        avoidArtists: avoidArtists
+    )
     if gachaCandidatesPool.count >= 2 {
         result.append(
             HeroCardModel(
@@ -1151,12 +1159,15 @@ public func buildHeroCards(
     }
 
     // 3. Recommendation cards from Home shelves with contextual seed labels
-    let sampleLiked = liked
+    let sampleLiked = liked.filter { !avoidSongIds.contains($0.id) && !avoidArtists.contains($0.artist.lowercased()) }
     var likedIndex = 0
 
     for section in sections {
         for item in section.items {
-            guard !seenMediaIds.contains(item.id), item.thumbnail != nil else { continue }
+            guard !seenMediaIds.contains(item.id),
+                  item.thumbnail != nil,
+                  !avoidSongIds.contains(item.id),
+                  !avoidArtists.contains(item.artist.lowercased()) else { continue }
 
             if item.kind == .song {
                 seenMediaIds.insert(item.id)
@@ -1214,7 +1225,9 @@ public func buildHeroCards(
 
     // 4. Fill with History / Liked fallback if needed
     if result.count < 3 {
-        for song in liked where !seenMediaIds.contains(song.id) {
+        for song in liked where !seenMediaIds.contains(song.id) &&
+                               !avoidSongIds.contains(song.id) &&
+                               !avoidArtists.contains(song.artist.lowercased()) {
             seenMediaIds.insert(song.id)
             result.append(
                 HeroCardModel(
@@ -1237,12 +1250,15 @@ public func buildHeroCards(
 public func buildGachaCandidates(
     history: [SongItem],
     liked: [SongItem],
-    sections: [HomeSection]
+    sections: [HomeSection],
+    avoidSongIds: Set<String> = [],
+    avoidArtists: Set<String> = []
 ) -> [SongItem] {
     var pool: [SongItem] = []
     var seen = Set<String>()
 
     for song in (history + liked) where song.thumbnail != nil && !song.thumbnail!.isEmpty {
+        guard !avoidSongIds.contains(song.id), !avoidArtists.contains(song.artist.lowercased()) else { continue }
         if !seen.contains(song.id) {
             seen.insert(song.id)
             pool.append(song)
@@ -1251,6 +1267,7 @@ public func buildGachaCandidates(
 
     for section in sections {
         for item in section.items where item.kind == .song && item.thumbnail != nil && !item.thumbnail!.isEmpty {
+            guard !avoidSongIds.contains(item.id), !avoidArtists.contains(item.artist.lowercased()) else { continue }
             if !seen.contains(item.id) {
                 seen.insert(item.id)
                 pool.append(item)

@@ -94,6 +94,35 @@ public final class AudioPlayerService: NSObject, ObservableObject {
     private var crossmixDurationTarget: Double = 0
     private var crossmixPreloaded: (song: SongItem, item: AVPlayerItem, durSec: Double)?
 
+    // Play & Skip tracking (Listening Signals)
+    private var activeListenedSec: Double = 0.0
+    private var hasLoggedPlayForCurrentTrack: Bool = false
+    private var lastPlaybackTickDate: Date? = nil
+
+    private func handleTrackDeparture() {
+        guard let leaving = currentTrack else { return }
+        let listened = activeListenedSec
+        let dur = durationSec
+        let recorded = hasLoggedPlayForCurrentTrack
+
+        activeListenedSec = 0.0
+        hasLoggedPlayForCurrentTrack = false
+        lastPlaybackTickDate = nil
+
+        if recorded { return }
+
+        // Ignore quick skips under 1.5 seconds (e.g. rapid queue scrubbing)
+        guard listened >= 1.5 else { return }
+
+        // Ignore ultra short tracks (< 40s) from skip penalty
+        if dur > 0 && dur < 40.0 { return }
+
+        // If listened less than 30s and less than 50% of duration: record as a skip
+        if listened < 30.0 && (dur <= 0 || listened < dur * 0.5) {
+            LibraryStore.shared.recordSkip(leaving)
+        }
+    }
+
     private var pauseFadeTimer: Timer?
     private var pauseFadeStartDate: Date?
     private var pauseFadeAnchorSec: Double?
@@ -160,6 +189,9 @@ public final class AudioPlayerService: NSObject, ObservableObject {
 
     public func prepare(song: SongItem, queue: [SongItem] = []) {
         guard song.kind == .song else { return }
+        if self.currentTrack?.id != song.id {
+            handleTrackDeparture()
+        }
         let songs = queue.filter { $0.kind == .song }
         let cleanQueue = songs.isEmpty ? [song] : songs
         self.originalQueue = cleanQueue
@@ -172,11 +204,17 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         self.durationSec = Double(song.duration ?? 0)
         self.progress = self.durationSec > 0 ? (initialSec / self.durationSec) : 0
         self.isPlaying = false
+        self.activeListenedSec = 0.0
+        self.hasLoggedPlayForCurrentTrack = false
+        self.lastPlaybackTickDate = nil
         updateNowPlaying()
     }
 
     public func play(song: SongItem, newQueue: [SongItem] = [], resumeAt: Double? = nil) {
         guard song.kind == .song else { return }
+        if self.currentTrack?.id != song.id {
+            handleTrackDeparture()
+        }
         cancelCrossmix()
         cancelPauseFade()
         if let p = player {
@@ -222,8 +260,10 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         self.positionSec = startSec
         self.durationSec = Double(song.duration ?? 0)
         self.progress = self.durationSec > 0 ? min(startSec / self.durationSec, 1.0) : 0
+        self.activeListenedSec = 0.0
+        self.hasLoggedPlayForCurrentTrack = false
+        self.lastPlaybackTickDate = Date()
         if let thumb = song.thumbnail { ImageCache.shared.preload(urlString: thumb) }
-        LibraryStore.shared.recordPlay(song)
         if isAutoplay && (queue.count <= 6 || currentIndex >= queue.count - 2) {
             loadRadio(seed: song)
         }
@@ -326,11 +366,15 @@ public final class AudioPlayerService: NSObject, ObservableObject {
             let history = LibraryStore.shared.history
             let liked = LibraryStore.shared.likedSongs
             let existingIds = Set(self.queue.map(\.id))
+            let avoidSongIds = LibraryStore.shared.avoidSongIds()
+            let avoidArtists = LibraryStore.shared.avoidArtists()
             let recommended = await InnerTubeService.shared.fetchSmartQueueRecommendations(
                 current: seed,
                 history: history,
                 liked: liked,
-                existingQueueIds: existingIds
+                existingQueueIds: existingIds,
+                avoidSongIds: avoidSongIds,
+                avoidArtists: avoidArtists
             )
             guard !Task.isCancelled else { return }
             let newTracks = recommended.filter { r in !self.queue.contains(where: { $0.id == r.id }) }
@@ -361,6 +405,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         originalQueue.removeAll(where: { $0.id == removed.id })
 
         if queue.isEmpty {
+            handleTrackDeparture()
             player?.pause()
             player = nil
             currentTrack = nil
@@ -432,9 +477,31 @@ public final class AudioPlayerService: NSObject, ObservableObject {
                 let current = time.seconds
                 if current.isFinite && current >= 0 {
                     if self.pauseFadeTimer != nil { return }
+
+                    let now = Date()
+                    if let lastTick = self.lastPlaybackTickDate {
+                        let delta = min(max(now.timeIntervalSince(lastTick), 0.0), 1.0)
+                        if self.isPlaying {
+                            self.activeListenedSec += delta
+                        }
+                    }
+                    self.lastPlaybackTickDate = now
+
                     if self.durationSec > 0 {
                         self.positionSec = min(current, self.durationSec)
                         self.progress = min(max(current / self.durationSec, 0.0), 1.0)
+
+                        // Evaluate listening signals: completed play threshold
+                        if !self.hasLoggedPlayForCurrentTrack, let cur = self.currentTrack {
+                            let dur = self.durationSec
+                            let isLongEnough = self.activeListenedSec >= 30.0
+                            let isHalfPlayed = dur > 0 && dur < 40.0 && self.activeListenedSec >= (dur * 0.5)
+                            let isNearEnd = current >= dur - 1.0
+                            if isLongEnough || isHalfPlayed || isNearEnd {
+                                self.hasLoggedPlayForCurrentTrack = true
+                                LibraryStore.shared.recordPlay(cur)
+                            }
+                        }
 
                         // Natural track end guard without forwardPlaybackEndTime stall
                         if current >= self.durationSec - 0.25 {
@@ -711,6 +778,10 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         let newItem = pre.item
         attachObservers(to: newPlayer, item: newItem)
 
+        if self.currentTrack?.id != pre.song.id {
+            handleTrackDeparture()
+        }
+
         self.currentTrack = pre.song
         self.currentIndex = queue.firstIndex(where: { $0.id == pre.song.id }) ?? (currentIndex + 1)
         self.durationSec = pre.durSec
@@ -719,7 +790,9 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         self.positionSec = effectivePos
         self.progress = min(effectivePos / max(pre.durSec, 1.0), 1.0)
         self.isPlaying = true
-        LibraryStore.shared.recordPlay(pre.song)
+        self.activeListenedSec = overlapSec
+        self.hasLoggedPlayForCurrentTrack = false
+        self.lastPlaybackTickDate = Date()
 
         if isAutoplay && (queue.count <= 6 || currentIndex >= queue.count - 2) {
             loadRadio(seed: pre.song)
@@ -736,6 +809,11 @@ public final class AudioPlayerService: NSObject, ObservableObject {
     }
 
     private func handleTrackEnded() {
+        if !hasLoggedPlayForCurrentTrack, let cur = currentTrack {
+            hasLoggedPlayForCurrentTrack = true
+            LibraryStore.shared.recordPlay(cur)
+        }
+
         if sleepTimerOption == .endOfTrack {
             sleepTimerOption = .off
             player?.pause()
@@ -943,11 +1021,15 @@ public final class AudioPlayerService: NSObject, ObservableObject {
                 let history = LibraryStore.shared.history
                 let liked = LibraryStore.shared.likedSongs
                 let existingIds = Set(self.queue.map(\.id))
+                let avoidSongIds = LibraryStore.shared.avoidSongIds()
+                let avoidArtists = LibraryStore.shared.avoidArtists()
                 let recommended = await InnerTubeService.shared.fetchSmartQueueRecommendations(
                     current: current,
                     history: history,
                     liked: liked,
-                    existingQueueIds: existingIds
+                    existingQueueIds: existingIds,
+                    avoidSongIds: avoidSongIds,
+                    avoidArtists: avoidArtists
                 )
                 let newTracks = recommended.filter { r in !self.queue.contains(where: { $0.id == r.id }) }
                 if !newTracks.isEmpty {

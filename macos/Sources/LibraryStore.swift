@@ -8,6 +8,9 @@ public final class LibraryStore: ObservableObject {
 
     @Published public private(set) var likedSongs: [SongItem] = []
     @Published public private(set) var history: [SongItem] = []
+    @Published public private(set) var recentSkips: [SkipSignal] = []
+    @Published public private(set) var blockedSongIds: Set<String> = []
+    @Published public private(set) var blockedArtists: Set<String> = []
     @Published public var username: String = "User"
     @Published public var userTag: String = "8402"
     @Published public var profilePicPath: String? = nil
@@ -25,6 +28,18 @@ public final class LibraryStore: ObservableObject {
     private let iCloudURL: URL?
     private var fileWatcher: DispatchSourceFileSystemObject?
 
+    public struct SkipSignal: Codable, Equatable {
+        public let songId: String
+        public let artist: String
+        public let timestamp: Date
+
+        public init(songId: String, artist: String, timestamp: Date = Date()) {
+            self.songId = songId
+            self.artist = artist
+            self.timestamp = timestamp
+        }
+    }
+
     private struct Snapshot: Codable {
         var username: String?
         var userTag: String?
@@ -32,6 +47,9 @@ public final class LibraryStore: ObservableObject {
         var totalPlayTimeSec: Int?
         var likedSongs: [SongItem]
         var history: [SongItem]
+        var recentSkips: [SkipSignal]?
+        var blockedSongIds: [String]?
+        var blockedArtists: [String]?
     }
 
     private init() {
@@ -90,8 +108,67 @@ public final class LibraryStore: ObservableObject {
         if history.count > 150 {
             history.removeLast(history.count - 150)
         }
+        recentSkips.removeAll(where: { $0.songId == song.id })
         totalPlayTimeSec += song.duration ?? 180
         save()
+    }
+
+    public func recordSkip(_ song: SongItem) {
+        guard song.kind == .song else { return }
+        let signal = SkipSignal(songId: song.id, artist: song.artist, timestamp: Date())
+        recentSkips.append(signal)
+        if recentSkips.count > 150 {
+            recentSkips.removeFirst(recentSkips.count - 150)
+        }
+        save()
+    }
+
+    public func blockSong(id: String) {
+        blockedSongIds.insert(id)
+        save()
+    }
+
+    public func unblockSong(id: String) {
+        blockedSongIds.remove(id)
+        save()
+    }
+
+    public func blockArtist(_ artist: String) {
+        let key = artist.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !key.isEmpty else { return }
+        blockedArtists.insert(key)
+        save()
+    }
+
+    public func unblockArtist(_ artist: String) {
+        let key = artist.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        blockedArtists.remove(key)
+        save()
+    }
+
+    public func avoidSongIds(withinDays days: Int = 14) -> Set<String> {
+        let cutoff = Date().addingTimeInterval(-Double(days * 86400))
+        var set = blockedSongIds
+        for skip in recentSkips where skip.timestamp >= cutoff {
+            set.insert(skip.songId)
+        }
+        return set
+    }
+
+    public func avoidArtists(withinDays days: Int = 14, threshold: Int = 3) -> Set<String> {
+        let cutoff = Date().addingTimeInterval(-Double(days * 86400))
+        var set = blockedArtists
+        var counts: [String: Int] = [:]
+        for skip in recentSkips where skip.timestamp >= cutoff {
+            let key = skip.artist.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if !key.isEmpty {
+                counts[key, default: 0] += 1
+            }
+        }
+        for (artist, count) in counts where count >= threshold {
+            set.insert(artist)
+        }
+        return set
     }
 
     public func updateProfile(name: String, photoData: Data?) {
@@ -143,6 +220,9 @@ public final class LibraryStore: ObservableObject {
         if let sec = snap.totalPlayTimeSec { self.totalPlayTimeSec = sec }
         self.likedSongs = snap.likedSongs
         self.history = snap.history
+        self.recentSkips = snap.recentSkips ?? []
+        self.blockedSongIds = Set(snap.blockedSongIds ?? [])
+        self.blockedArtists = Set(snap.blockedArtists ?? [])
         self.lastSyncDate = Date()
     }
 
@@ -153,7 +233,10 @@ public final class LibraryStore: ObservableObject {
             profilePicPath: profilePicPath,
             totalPlayTimeSec: totalPlayTimeSec,
             likedSongs: likedSongs,
-            history: history
+            history: history,
+            recentSkips: recentSkips,
+            blockedSongIds: Array(blockedSongIds),
+            blockedArtists: Array(blockedArtists)
         )
         guard let data = try? JSONEncoder().encode(snap) else { return }
 

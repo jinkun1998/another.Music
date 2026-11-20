@@ -42,6 +42,11 @@ public struct LibraryScreen: View {
                             TrackRow(song: s, onPlay: { onPlay(s, items) })
                                 .contextMenu {
                                     Button(library.isLiked(s) ? "Unlike" : "Like") { library.toggleLike(s) }
+                                    Divider()
+                                    Button("Don't recommend this song") { library.blockSong(id: s.id) }
+                                    if !s.artist.isEmpty && s.artist != "YouTube Music" {
+                                        Button("Don't recommend \(s.artist)") { library.blockArtist(s.artist) }
+                                    }
                                 }
                         }
                     }
