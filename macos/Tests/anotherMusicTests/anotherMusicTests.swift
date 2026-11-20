@@ -539,4 +539,20 @@ final class AnotherMusicTests: XCTestCase {
         XCTAssertEqual(volNotchB, 11)
         XCTAssertNotEqual(volNotchA, volNotchB, "Volume notch should change across 5% boundary")
     }
+
+    func testDonationResourceAndQRAsset() {
+        let qrPath = URL(fileURLWithPath: #file)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Resources/DonationVietQR.png")
+            .path
+        XCTAssertTrue(FileManager.default.fileExists(atPath: qrPath), "DonationVietQR.png must exist in macos/Resources")
+        if let img = NSImage(contentsOfFile: qrPath) {
+            XCTAssertGreaterThan(img.size.width, 0)
+            XCTAssertGreaterThan(img.size.height, 0)
+        } else {
+            XCTFail("Failed to load DonationVietQR.png into NSImage")
+        }
+    }
 }

@@ -55,6 +55,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
     @ObservedObject private var updater = UpdateService.shared
 
     @State private var showingClearAlert: Bool = false
+    @State private var showVietQRModal: Bool = false
 
     private var appVersionDisplay: String {
         let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "8.4.1-beta.4"
@@ -167,6 +168,47 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         .alert("Clear Playback History?", isPresented: $showingClearAlert) {
             Button("Cancel", role: .cancel) {}
             Button("Clear", role: .destructive) { library.clearHistory() }
+        }
+        .sheet(isPresented: $showVietQRModal) {
+            VStack(spacing: 16) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Donate via VietQR")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(.white)
+                        Text("Scan using any Vietnamese Banking or Napas 24/7 app")
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+                    Spacer()
+                    Button {
+                        showVietQRModal = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if let qrImg = loadDonationQRImage() {
+                    Image(nsImage: qrImg)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: 320, maxHeight: 420)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                } else {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.white.opacity(0.05))
+                        .frame(width: 320, height: 320)
+                        .overlay(
+                            Text("QR Code not found")
+                                .foregroundColor(.white.opacity(0.5))
+                        )
+                }
+            }
+            .padding(20)
+            .frame(width: 360)
         }
     }
 
@@ -490,6 +532,43 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             }
 
             SettingsGroupCard {
+                VStack(spacing: 12) {
+                    SettingsRow(
+                        icon: "heart.fill",
+                        title: "GitHub Sponsors",
+                        subtitle: "Support anotherMusic and open-source development"
+                    ) {
+                        Button {
+                            if let url = URL(string: "https://github.com/sponsors/jinkun1998") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text("Sponsor")
+                                Image(systemName: "arrow.up.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color(red: 0.98, green: 0.28, blue: 0.42))
+                    }
+
+                    Divider().overlay(Color.white.opacity(0.08))
+
+                    SettingsRow(
+                        icon: "qrcode",
+                        title: "VietQR / Bank Transfer",
+                        subtitle: "Scan QR code or transfer directly via banking app"
+                    ) {
+                        Button("View QR") {
+                            showVietQRModal = true
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+            }
+
+            SettingsGroupCard {
                 SettingsRow(icon: "sparkles", title: "Setup Wizard", subtitle: "Replay introductory onboarding experience") {
                     Button("Replay Onboarding") {
                         hasCompletedOnboarding = false
@@ -592,6 +671,21 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             .appendingPathComponent("Resources/icon.png")
         if let icon = NSImage(contentsOf: iconPng) {
             return icon
+        }
+        return nil
+    }
+
+    private func loadDonationQRImage() -> NSImage? {
+        if let path = Bundle.main.path(forResource: "DonationVietQR", ofType: "png"),
+           let img = NSImage(contentsOfFile: path) {
+            return img
+        }
+        let qrPng = URL(fileURLWithPath: #file)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Resources/DonationVietQR.png")
+        if let img = NSImage(contentsOf: qrPng) {
+            return img
         }
         return nil
     }

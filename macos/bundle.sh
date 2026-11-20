@@ -37,6 +37,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 mkdir -p "$APP/Contents/Resources"
 cp Resources/*.wav "$APP/Contents/Resources/" 2>/dev/null || true
+cp Resources/*.png "$APP/Contents/Resources/" 2>/dev/null || true
 
 cp "$BIN" "$APP/Contents/MacOS/anotherMusic"
 chmod +x "$APP/Contents/MacOS/anotherMusic"
