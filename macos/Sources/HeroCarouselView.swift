@@ -207,6 +207,7 @@ public struct GachaCardView: View {
     public let onPlayWonTrack: (SongItem, [SongItem]) -> Void
     public let onRollingStateChanged: ((Bool) -> Void)?
 
+    @State private var activeCandidates: [SongItem] = []
     @State private var reelPosition: Double = 0
     @State private var isRolling: Bool = false
     @State private var landedSong: SongItem?
@@ -235,7 +236,7 @@ public struct GachaCardView: View {
             gachaBackgroundWash()
 
             // Reel covers column on right
-            if !candidates.isEmpty {
+            if !effectiveCandidates.isEmpty {
                 reelCoversColumn()
             }
 
@@ -285,7 +286,7 @@ public struct GachaCardView: View {
                     .scaleEffect(isHovered && !isRolling ? 1.04 : 1.0)
                 }
                 .buttonStyle(.plain)
-                .disabled(isRolling || candidates.isEmpty)
+                .disabled(isRolling || effectiveCandidates.isEmpty)
             }
             .padding(.horizontal, 32)
             .padding(.bottom, 26)
@@ -299,10 +300,26 @@ public struct GachaCardView: View {
         )
         .shadow(color: Color.black.opacity(0.35), radius: 18, x: 0, y: 8)
         .onHover { isHovered = $0 }
+        .onAppear {
+            if activeCandidates.isEmpty && !candidates.isEmpty {
+                activeCandidates = candidates
+            }
+        }
+        .onChange(of: candidates) { _, newCandidates in
+            // Android Mochy rule: reel covers are picked once and never shuffled while rolling or landed/playing!
+            guard !isRolling, landedSong == nil else { return }
+            if !newCandidates.isEmpty {
+                activeCandidates = newCandidates
+            }
+        }
         .onDisappear {
             rollTimer?.invalidate()
             rollTimer = nil
         }
+    }
+
+    private var effectiveCandidates: [SongItem] {
+        activeCandidates.isEmpty ? candidates : activeCandidates
     }
 
     private var isCurrentlyPlayingResult: Bool {
@@ -405,10 +422,11 @@ public struct GachaCardView: View {
 
     @ViewBuilder
     private func reelCoversColumn() -> some View {
-        let count = candidates.count
+        let pool = effectiveCandidates
+        let count = pool.count
 
         ZStack {
-            ForEach(Array(candidates.enumerated()), id: \.element.id) { index, song in
+            ForEach(Array(pool.enumerated()), id: \.element.id) { index, song in
                 let d = reelDistance(index: index, reel: reelPosition, count: count)
                 if abs(d) <= 2.6 {
                     let near = max(0, 1.0 - abs(d))
@@ -471,12 +489,14 @@ public struct GachaCardView: View {
     }
 
     private func startRoll() {
-        guard !isRolling, !candidates.isEmpty else { return }
+        let pool = effectiveCandidates
+        guard !isRolling, !pool.isEmpty else { return }
         isRolling = true
+        landedSong = nil
         onRollingStateChanged?(true)
         GachaSounds.shared.prepare()
 
-        let count = candidates.count
+        let count = pool.count
         guard count > 0 else { return }
         let targetIndex = Int.random(in: 0..<count)
         let fullRevolutions = 3
@@ -516,7 +536,7 @@ public struct GachaCardView: View {
                 self.isRolling = false
                 self.onRollingStateChanged?(false)
 
-                let wonSong = self.candidates[targetIndex % count]
+                let wonSong = pool[targetIndex % count]
                 self.landedSong = wonSong
 
                 GachaSounds.shared.win()
@@ -531,7 +551,7 @@ public struct GachaCardView: View {
                 }
 
                 // Auto-play the won track with radio queue!
-                self.onPlayWonTrack(wonSong, self.candidates)
+                self.onPlayWonTrack(wonSong, pool)
             }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -594,145 +614,154 @@ public struct HeroCardView: View {
     }
 
     public var body: some View {
-        ZStack {
-            // High-resolution Artwork Background
-            if let thumb = card.thumbnailUrl, !thumb.isEmpty {
-                CachedAsyncImage(
-                    urlString: thumb.ytResize(width: 1200, height: 1200),
-                    content: { image in
-                        image.resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .clipped()
-                    },
-                    placeholder: {
-                        Color(red: 0.12, green: 0.12, blue: 0.16)
-                    }
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-            } else {
-                LinearGradient(
-                    colors: [Color(red: 0.18, green: 0.20, blue: 0.28), Color.black],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            }
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
 
-            // Scrim Gradients for crisp typography
-            // Top scrim for seed badge
-            LinearGradient(
-                stops: [
-                    .init(color: Color.black.opacity(0.60), location: 0.0),
-                    .init(color: Color.clear, location: 0.35)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-
-            // Bottom heavy scrim for title, subtitle, and pill
-            LinearGradient(
-                stops: [
-                    .init(color: Color.clear, location: 0.22),
-                    .init(color: Color.black.opacity(0.48), location: 0.58),
-                    .init(color: Color.black.opacity(0.92), location: 1.0)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-
-            // Foreground Content
-            VStack(alignment: .leading, spacing: 6) {
-                Spacer()
-
-                // Seed Label Line matching Android HeroLabelLine
-                let label = card.label(isPlaying: isPlaying)
-                HStack(spacing: 6) {
-                    Text(label.text)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(Color.white.opacity(0.70))
-
-                    if let seedCover = label.coverUrl, !seedCover.isEmpty {
-                        CachedAsyncImage(
-                            urlString: seedCover.ytResize(width: 80, height: 80),
-                            content: { img in
-                                if label.roundCover {
-                                    img.resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: 18, height: 18)
-                                        .clipShape(Circle())
-                                } else {
-                                    img.resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: 18, height: 18)
-                                        .clipShape(RoundedRectangle(cornerRadius: 4.5, style: .continuous))
-                                }
-                            },
-                            placeholder: {
-                                Color.white.opacity(0.2)
-                                    .frame(width: 18, height: 18)
-                            }
-                        )
-                    }
-
-                    if let subject = label.subject, !subject.isEmpty {
-                        Text(subject)
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(Color.white.opacity(0.92))
-                            .lineLimit(1)
-                    }
-                }
-
-                // Main Title
-                Text(card.title)
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-                    .shadow(color: Color.black.opacity(0.7), radius: 10, x: 0, y: 4)
-
-                // Subtitle
-                if !card.subtitle.isEmpty {
-                    Text(card.subtitle)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white.opacity(0.78))
-                        .lineLimit(1)
-                        .shadow(color: Color.black.opacity(0.6), radius: 6, x: 0, y: 2)
-                }
-
-                Spacer().frame(height: 5)
-
-                // Pill Action Button matching Android Mochy HeroPill
-                Button(action: {
-                    handlePillClick()
-                }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: pillIcon)
-                            .font(.system(size: 13, weight: .bold))
-
-                        Text(pillText)
-                            .font(.system(size: 14, weight: .bold))
-                    }
-                    .foregroundColor(Color(red: 0.18, green: 0.18, blue: 0.18))
-                    .padding(.horizontal, 20)
-                    .frame(height: 34)
-                    .background(
-                        Capsule()
-                            .fill(Color.white.opacity(0.68))
+            ZStack(alignment: .bottomLeading) {
+                // High-resolution Artwork Background
+                if let thumb = card.thumbnailUrl, !thumb.isEmpty {
+                    CachedAsyncImage(
+                        urlString: thumb.ytResize(width: 1200, height: 1200),
+                        content: { image in
+                            image.resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: w, height: h)
+                                .clipped()
+                        },
+                        placeholder: {
+                            Color(red: 0.12, green: 0.12, blue: 0.16)
+                                .frame(width: w, height: h)
+                        }
                     )
-                    .scaleEffect(isPillHovered ? 1.04 : 1.0)
+                } else {
+                    LinearGradient(
+                        colors: [Color(red: 0.18, green: 0.20, blue: 0.28), Color.black],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .frame(width: w, height: h)
                 }
-                .buttonStyle(.plain)
-                .onHover { isPillHovered = $0 }
+
+                // Scrim Gradients for crisp typography
+                // Top scrim for seed badge
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.black.opacity(0.60), location: 0.0),
+                        .init(color: Color.clear, location: 0.35)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(width: w, height: h)
+
+                // Bottom heavy scrim for title, subtitle, and pill
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.clear, location: 0.22),
+                        .init(color: Color.black.opacity(0.48), location: 0.58),
+                        .init(color: Color.black.opacity(0.92), location: 1.0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(width: w, height: h)
+
+                // Foreground Content
+                VStack(alignment: .leading, spacing: 6) {
+                    Spacer()
+
+                    // Seed Label Line matching Android HeroLabelLine
+                    let label = card.label(isPlaying: isPlaying)
+                    HStack(spacing: 6) {
+                        Text(label.text)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(Color.white.opacity(0.70))
+
+                        if let seedCover = label.coverUrl, !seedCover.isEmpty {
+                            CachedAsyncImage(
+                                urlString: seedCover.ytResize(width: 80, height: 80),
+                                content: { img in
+                                    if label.roundCover {
+                                        img.resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: 18, height: 18)
+                                            .clipShape(Circle())
+                                    } else {
+                                        img.resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: 18, height: 18)
+                                            .clipShape(RoundedRectangle(cornerRadius: 4.5, style: .continuous))
+                                    }
+                                },
+                                placeholder: {
+                                    Color.white.opacity(0.2)
+                                        .frame(width: 18, height: 18)
+                                }
+                            )
+                        }
+
+                        if let subject = label.subject, !subject.isEmpty {
+                            Text(subject)
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(Color.white.opacity(0.92))
+                                .lineLimit(1)
+                        }
+                    }
+
+                    // Main Title
+                    Text(card.title)
+                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .lineLimit(2)
+                        .shadow(color: Color.black.opacity(0.7), radius: 10, x: 0, y: 4)
+
+                    // Subtitle
+                    if !card.subtitle.isEmpty {
+                        Text(card.subtitle)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white.opacity(0.78))
+                            .lineLimit(1)
+                            .shadow(color: Color.black.opacity(0.6), radius: 6, x: 0, y: 2)
+                    }
+
+                    Spacer().frame(height: 5)
+
+                    // Pill Action Button matching Android Mochy HeroPill
+                    Button(action: {
+                        handlePillClick()
+                    }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: pillIcon)
+                                .font(.system(size: 13, weight: .bold))
+
+                            Text(pillText)
+                                .font(.system(size: 14, weight: .bold))
+                        }
+                        .foregroundColor(Color(red: 0.18, green: 0.18, blue: 0.18))
+                        .padding(.horizontal, 20)
+                        .frame(height: 34)
+                        .background(
+                            Capsule()
+                                .fill(Color.white.opacity(0.68))
+                        )
+                        .scaleEffect(isPillHovered ? 1.04 : 1.0)
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { isPillHovered = $0 }
+                }
+                .padding(.horizontal, 32)
+                .padding(.bottom, 26)
+                .frame(width: w, height: h, alignment: .bottomLeading)
             }
-            .padding(.horizontal, 32)
-            .padding(.bottom, 26)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.35), radius: 18, x: 0, y: 8)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.35), radius: 18, x: 0, y: 8)
         .onHover { isHovered = $0 }
     }
 
@@ -778,7 +807,7 @@ public struct HeroCarouselView: View {
     @State private var activeCardId: String?
     @State private var isCarouselHovered: Bool = false
     @State private var isGachaRolling: Bool = false
-    @State private var autoAdvanceTimer: Timer?
+    @State private var gachaHasRolled: Bool = false
 
     public init(
         cards: [HeroCardModel],
@@ -830,10 +859,14 @@ public struct HeroCarouselView: View {
                                                     isAudioPlaying: isAudioPlaying,
                                                     currentPlayingTrackId: currentPlayingTrackId,
                                                     onPlayWonTrack: { wonSong, pool in
+                                                        self.gachaHasRolled = true
                                                         onPlaySong(wonSong, pool)
                                                     },
                                                     onRollingStateChanged: { rolling in
                                                         self.isGachaRolling = rolling
+                                                        if rolling {
+                                                            self.gachaHasRolled = true
+                                                        }
                                                     }
                                                 )
                                             } else {
@@ -947,10 +980,20 @@ public struct HeroCarouselView: View {
                         if activeCardId == nil {
                             activeCardId = cards.first?.id
                         }
-                        startAutoAdvance(proxy: scrollProxy)
                     }
-                    .onDisappear {
-                        stopAutoAdvance()
+                    .task(id: "\(isAudioPlaying)_\(isGachaRolling)_\(isCarouselHovered)_\(gachaHasRolled)_\(activeCardId ?? "")") {
+                        // Android Mochy rule: do not auto-advance if audio is playing, gacha is rolling, user is hovering, or on gacha card after rolling
+                        guard !isAudioPlaying, !isGachaRolling, !isCarouselHovered, cards.count > 1 else { return }
+                        let onGacha = (currentIndex < cards.count) && cards[currentIndex].kind == .gacha
+                        if onGacha && gachaHasRolled { return }
+
+                        do {
+                            try await Task.sleep(nanoseconds: 5_500_000_000)
+                            guard !Task.isCancelled else { return }
+                            advanceNext(proxy: scrollProxy)
+                        } catch {
+                            // Cancelled on state change
+                        }
                     }
                 }
             }
@@ -975,20 +1018,6 @@ public struct HeroCarouselView: View {
             activeCardId = prevId
             proxy.scrollTo(prevId, anchor: .center)
         }
-    }
-
-    private func startAutoAdvance(proxy: ScrollViewProxy) {
-        stopAutoAdvance()
-        autoAdvanceTimer = Timer.scheduledTimer(withTimeInterval: 5.5, repeats: true) { _ in
-            // Keep card still while music is actively playing, gacha is rolling, or user is hovering
-            guard !isCarouselHovered, !isGachaRolling, !isAudioPlaying, cards.count > 1 else { return }
-            advanceNext(proxy: proxy)
-        }
-    }
-
-    private func stopAutoAdvance() {
-        autoAdvanceTimer?.invalidate()
-        autoAdvanceTimer = nil
     }
 }
 
@@ -1049,7 +1078,7 @@ public func buildHeroCards(
     }
 
     // 3. Recommendation cards from Home shelves with contextual seed labels
-    let sampleLiked = liked.shuffled()
+    let sampleLiked = liked
     var likedIndex = 0
 
     for section in sections {
@@ -1156,5 +1185,5 @@ public func buildGachaCandidates(
         }
     }
 
-    return Array(pool.shuffled().prefix(10))
+    return Array(pool.prefix(10))
 }
