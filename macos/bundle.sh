@@ -8,7 +8,7 @@ GRADLE_FILE="$DIR/../app/build.gradle.kts"
 ANDROID_VERSION=$(grep -oE 'versionName = "[^"]+' "$GRADLE_FILE" | cut -d'"' -f2 | awk '{print $1}')
 ANDROID_BASE_VERSION=$(echo "$ANDROID_VERSION" | sed -E 's/-.*//')
 ANDROID_BUILD=$(grep -oE 'versionCode = [0-9]+' "$GRADLE_FILE" | awk '{print $3}')
-RELEASE_CHANNEL="${RELEASE_CHANNEL:-beta.4}"
+RELEASE_CHANNEL="${RELEASE_CHANNEL:-beta.5}"
 if [ -n "$RELEASE_CHANNEL" ]; then
     APP_VERSION="${APP_VERSION:-${ANDROID_BASE_VERSION}-${RELEASE_CHANNEL}}"
 else
