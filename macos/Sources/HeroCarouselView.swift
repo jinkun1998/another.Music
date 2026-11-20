@@ -899,7 +899,7 @@ public struct HeroCarouselView: View {
                             }
                             .scrollTargetBehavior(.viewAligned)
                             .safeAreaPadding(.horizontal, sideInset)
-                            .scrollPosition(id: $activePageIndex)
+                            .scrollPosition(id: $activePageIndex, anchor: .center)
                             .simultaneousGesture(
                                 DragGesture(minimumDistance: 25)
                                     .onEnded { value in
@@ -973,10 +973,22 @@ public struct HeroCarouselView: View {
                         isCarouselHovered = hovering
                     }
                     .onAppear {
-                        if activePageIndex == nil {
-                            let initPage = initialPage
-                            activePageIndex = initPage
-                            scrollProxy.scrollTo(initPage, anchor: .center)
+                        let target = activePageIndex ?? initialPage
+                        activePageIndex = target
+                        DispatchQueue.main.async {
+                            scrollProxy.scrollTo(target, anchor: .center)
+                        }
+                    }
+                    .onChange(of: totalW) { _, _ in
+                        let target = activePageIndex ?? initialPage
+                        scrollProxy.scrollTo(target, anchor: .center)
+                    }
+                    .onChange(of: cards.count) { _, newCount in
+                        guard newCount > 0 else { return }
+                        let target = initialPage
+                        activePageIndex = target
+                        DispatchQueue.main.async {
+                            scrollProxy.scrollTo(target, anchor: .center)
                         }
                     }
                     .onChange(of: activePageIndex) { _, newPage in
