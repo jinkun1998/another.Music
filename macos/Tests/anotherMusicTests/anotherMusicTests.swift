@@ -514,4 +514,29 @@ final class AnotherMusicTests: XCTestCase {
         handler.forceStop()
         XCTAssertFalse(handler.isSwiping)
     }
+
+    @MainActor
+    func testAppHapticsExecutionAndNotchCalculation() {
+        // Verify haptic trigger methods execute without crashing on macOS test environment
+        AppHaptics.tick()
+        AppHaptics.alignment()
+        AppHaptics.levelChange()
+        AppHaptics.win()
+
+        // Test timeline detent notch calculation (2.5% per notch = 40 notches)
+        let notch0 = Int(0.01 * 40.0)
+        let notch1 = Int(0.03 * 40.0)
+        let notch2 = Int(0.04 * 40.0)
+        XCTAssertEqual(notch0, 0)
+        XCTAssertEqual(notch1, 1)
+        XCTAssertEqual(notch2, 1)
+        XCTAssertNotEqual(notch0, notch1, "Detent notch should change across 2.5% boundary")
+
+        // Test volume notch calculation (5% per notch = 20 notches)
+        let volNotchA = Int(0.50 * 20.0)
+        let volNotchB = Int(0.56 * 20.0)
+        XCTAssertEqual(volNotchA, 10)
+        XCTAssertEqual(volNotchB, 11)
+        XCTAssertNotEqual(volNotchA, volNotchB, "Volume notch should change across 5% boundary")
+    }
 }

@@ -148,12 +148,14 @@ public final class GachaSounds {
         tickSound?.stop()
         tickSound?.volume = 0.55
         tickSound?.play()
+        AppHaptics.levelChange()
     }
 
     public func win() {
         winSound?.stop()
         winSound?.volume = 0.85
         winSound?.play()
+        AppHaptics.win()
     }
 }
 
@@ -506,6 +508,7 @@ public struct GachaCardView: View {
     private func startRoll() {
         let pool = effectiveCandidates
         guard !state.isRolling, !pool.isEmpty else { return }
+        AppHaptics.alignment()
         state.isRolling = true
         state.landedSong = nil
         state.hasRolled = true
@@ -904,8 +907,10 @@ public struct HeroCarouselView: View {
                                 DragGesture(minimumDistance: 25)
                                     .onEnded { value in
                                         if value.translation.width < -40 {
+                                            AppHaptics.levelChange()
                                             advanceNext(proxy: scrollProxy)
                                         } else if value.translation.width > 40 {
+                                            AppHaptics.levelChange()
                                             advancePrev(proxy: scrollProxy)
                                         }
                                     }
@@ -919,6 +924,7 @@ public struct HeroCarouselView: View {
                                         .frame(width: idx == currentIndex ? 24 : 6, height: 6)
                                         .animation(.spring(response: 0.35, dampingFraction: 0.75), value: currentIndex)
                                         .onTapGesture {
+                                            AppHaptics.tick()
                                             jumpTo(cardIndex: idx, proxy: scrollProxy)
                                         }
                                 }
@@ -933,6 +939,7 @@ public struct HeroCarouselView: View {
                         if isCarouselHovered && cards.count > 1 {
                             HStack {
                                 Button(action: {
+                                    AppHaptics.tick()
                                     advancePrev(proxy: scrollProxy)
                                 }) {
                                     Image(systemName: "chevron.left")
@@ -950,6 +957,7 @@ public struct HeroCarouselView: View {
                                 Spacer()
 
                                 Button(action: {
+                                    AppHaptics.tick()
                                     advanceNext(proxy: scrollProxy)
                                 }) {
                                     Image(systemName: "chevron.right")

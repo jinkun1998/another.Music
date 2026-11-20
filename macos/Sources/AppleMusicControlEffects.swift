@@ -47,7 +47,10 @@ public struct AppleMusicPlayPauseButton: View {
     }
 
     public var body: some View {
-        Button(action: onToggle) {
+        Button(action: {
+            AppHaptics.alignment()
+            onToggle()
+        }) {
             ZStack {
                 // Ambient luminous bloom aura behind the button when playing
                 Circle()
@@ -128,6 +131,7 @@ public struct AppleMusicSkipButton: View {
 
     public var body: some View {
         Button(action: {
+            AppHaptics.levelChange()
             triggerCount += 1
             withAnimation(.spring(response: 0.18, dampingFraction: 0.55)) {
                 nudge = direction.nudgeOffset
@@ -188,7 +192,10 @@ public struct AppleMusicTogglePillButton: View {
     }
 
     public var body: some View {
-        Button(action: onToggle) {
+        Button(action: {
+            AppHaptics.alignment()
+            onToggle()
+        }) {
             ZStack {
                 // Apple Music active highlight pill
                 Capsule()
@@ -403,13 +410,24 @@ public struct AppleMusicScrubber: View {
                         .onChanged { value in
                             let ratio = min(max(value.location.x / w, 0.0), 1.0)
                             if !isSeeking {
+                                AppHaptics.tick()
                                 onSeekStart(ratio)
                             } else {
+                                let oldNotch = Int(activeProgress * 40.0)
+                                let newNotch = Int(ratio * 40.0)
+                                if oldNotch != newNotch {
+                                    if ratio <= 0.001 || ratio >= 0.999 {
+                                        AppHaptics.alignment()
+                                    } else {
+                                        AppHaptics.tick()
+                                    }
+                                }
                                 onSeekChange(ratio)
                             }
                         }
                         .onEnded { value in
                             let ratio = min(max(value.location.x / w, 0.0), 1.0)
+                            AppHaptics.alignment()
                             onSeekEnd(ratio)
                         }
                 )
@@ -471,6 +489,7 @@ public struct AppleMusicScrubber: View {
             if phase == .began || (!isSwiping && phase == []) {
                 isSwiping = true
                 swipeProgress = progress
+                AppHaptics.tick()
                 onSeekStart(swipeProgress)
             }
 
@@ -484,12 +503,22 @@ public struct AppleMusicScrubber: View {
             }
 
             let next = min(max(swipeProgress + progressDelta, 0.0), 1.0)
+            let oldNotch = Int(swipeProgress * 40.0)
+            let newNotch = Int(next * 40.0)
+            if oldNotch != newNotch {
+                if next <= 0.001 || next >= 0.999 {
+                    AppHaptics.alignment()
+                } else {
+                    AppHaptics.tick()
+                }
+            }
             swipeProgress = next
             onSeekChange(next)
         }
 
         swipeHandler.onSwipeEnd = {
             isSwiping = false
+            AppHaptics.alignment()
             onSeekEnd(swipeProgress)
             if !isHovered {
                 swipeHandler.forceStop()
@@ -551,6 +580,7 @@ public struct AppleMusicVolumeControl: View {
         HStack(spacing: 8) {
             // Left speaker: interactive mute toggle
             Button(action: {
+                AppHaptics.alignment()
                 if volume > 0.001 {
                     preMuteVolume = volume
                     onVolumeChange(0.0)
@@ -610,12 +640,25 @@ public struct AppleMusicVolumeControl: View {
                 .gesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { v in
+                            if !isDragging {
+                                AppHaptics.tick()
+                            }
                             isDragging = true
                             let vol = Float(min(max(v.location.x / w, 0.0), 1.0))
+                            let oldNotch = Int(volume * 20.0)
+                            let newNotch = Int(vol * 20.0)
+                            if oldNotch != newNotch {
+                                if vol <= 0.001 || vol >= 0.999 {
+                                    AppHaptics.alignment()
+                                } else {
+                                    AppHaptics.levelChange()
+                                }
+                            }
                             onVolumeChange(vol)
                         }
                         .onEnded { _ in
                             isDragging = false
+                            AppHaptics.alignment()
                         }
                 )
             }
@@ -623,6 +666,7 @@ public struct AppleMusicVolumeControl: View {
 
             // Right speaker: jump to 100% volume
             Button(action: {
+                AppHaptics.alignment()
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                     onVolumeChange(1.0)
                 }
@@ -670,6 +714,7 @@ public struct AppleMusicVolumeControl: View {
         swipeHandler.onSwipeTick = { delta, phase, isPrecise in
             if phase == .began || (!isSwiping && phase == []) {
                 isSwiping = true
+                AppHaptics.tick()
             }
 
             let deltaVolume: Float
@@ -680,11 +725,21 @@ public struct AppleMusicVolumeControl: View {
             }
 
             let newVol = min(max(volume + deltaVolume, 0.0), 1.0)
+            let oldNotch = Int(volume * 20.0)
+            let newNotch = Int(newVol * 20.0)
+            if oldNotch != newNotch {
+                if newVol <= 0.001 || newVol >= 0.999 {
+                    AppHaptics.alignment()
+                } else {
+                    AppHaptics.levelChange()
+                }
+            }
             onVolumeChange(newVol)
         }
 
         swipeHandler.onSwipeEnd = {
             isSwiping = false
+            AppHaptics.alignment()
             if !isHovered {
                 swipeHandler.forceStop()
             }

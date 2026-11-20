@@ -143,6 +143,7 @@ import SwiftUI
                     .frame(width: 52, height: 42)
                     .contentShape(Rectangle())
                     .onTapGesture {
+                        AppHaptics.tick()
                         withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
                             selectedTab = tab.0
                         }
@@ -211,12 +212,23 @@ import SwiftUI
         swipeHandler.onSwipeTick = { delta, phase, isPrecise in
             let currentP = isSwipingProgress ? swipedProgress : progress
             let deltaP = Double(delta) * 0.0015
-            swipedProgress = min(max(currentP + deltaP, 0.0), 1.0)
+            let next = min(max(currentP + deltaP, 0.0), 1.0)
+            let oldNotch = Int(currentP * 40.0)
+            let newNotch = Int(next * 40.0)
+            if oldNotch != newNotch {
+                if next <= 0.001 || next >= 0.999 {
+                    AppHaptics.alignment()
+                } else {
+                    AppHaptics.tick()
+                }
+            }
+            swipedProgress = next
             isSwipingProgress = true
             onSeek?(swipedProgress)
         }
         swipeHandler.onSwipeEnd = {
             isSwipingProgress = false
+            AppHaptics.alignment()
             onSeek?(swipedProgress)
             if !isBarHovered {
                 swipeHandler.forceStop()

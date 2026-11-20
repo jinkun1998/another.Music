@@ -233,7 +233,10 @@ import AppKit
                                 .foregroundColor(library.isLiked(targetTrack) ? .white : .white.opacity(0.7))
                                 .frame(width: 36, height: 36)
                                 .contentShape(Rectangle())
-                                .onTapGesture { library.toggleLike(targetTrack) }
+                                .onTapGesture {
+                                    AppHaptics.alignment()
+                                    library.toggleLike(targetTrack)
+                                }
                         }
                         .frame(width: deckW)
                         .padding(.top, 4)
