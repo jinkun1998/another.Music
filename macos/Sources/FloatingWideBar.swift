@@ -11,7 +11,6 @@ import SwiftUI
     let onNext: () -> Void
     let onPrevious: () -> Void
     let onExpandPlayer: () -> Void
-    var onSeek: ((Double) -> Void)? = nil
 
     private let tabs = [
         ("Home", "house.fill"),
@@ -21,9 +20,6 @@ import SwiftUI
     ]
 
     @State private var isBarHovered: Bool = false
-    @State private var isSwipingProgress: Bool = false
-    @State private var swipedProgress: Double = 0.0
-    @StateObject private var swipeHandler = TwoFingerSwipeHandler()
 
     public var body: some View {
         HStack(spacing: 0) {
@@ -161,8 +157,7 @@ import SwiftUI
         .overlay(alignment: .bottom) {
             if currentTrack != nil {
                 GeometryReader { geo in
-                    let baseRatio = transitionProgress > 0 ? ((1.0 - transitionProgress) * progress) : progress
-                    let fillRatio = isSwipingProgress ? swipedProgress : baseRatio
+                    let fillRatio = transitionProgress > 0 ? ((1.0 - transitionProgress) * progress) : progress
                     Capsule()
                         .fill(
                             LinearGradient(
@@ -185,55 +180,7 @@ import SwiftUI
                 .animation(.spring(response: 0.24, dampingFraction: 0.8), value: isBarHovered)
             }
         }
-        .onHover { hovering in
-            isBarHovered = hovering
-            if hovering {
-                setupSwipeHandlers()
-                swipeHandler.start()
-            } else {
-                swipeHandler.stop()
-            }
-        }
-        .onAppear {
-            setupSwipeHandlers()
-        }
-        .onChange(of: progress) { _, newP in
-            if !isSwipingProgress {
-                swipedProgress = newP
-            }
-            setupSwipeHandlers()
-        }
-        .onDisappear {
-            swipeHandler.forceStop()
-        }
-    }
-
-    private func setupSwipeHandlers() {
-        swipeHandler.onSwipeTick = { delta, phase, isPrecise in
-            let currentP = isSwipingProgress ? swipedProgress : progress
-            let deltaP = Double(delta) * 0.0015
-            let next = min(max(currentP + deltaP, 0.0), 1.0)
-            let oldNotch = Int(currentP * 40.0)
-            let newNotch = Int(next * 40.0)
-            if oldNotch != newNotch {
-                if next <= 0.001 || next >= 0.999 {
-                    AppHaptics.alignment()
-                } else {
-                    AppHaptics.tick()
-                }
-            }
-            swipedProgress = next
-            isSwipingProgress = true
-            onSeek?(swipedProgress)
-        }
-        swipeHandler.onSwipeEnd = {
-            isSwipingProgress = false
-            AppHaptics.alignment()
-            onSeek?(swipedProgress)
-            if !isBarHovered {
-                swipeHandler.forceStop()
-            }
-        }
+        .onHover { isBarHovered = $0 }
     }
 
     @Namespace private var navNamespace
