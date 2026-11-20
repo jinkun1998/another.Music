@@ -114,6 +114,7 @@ public enum UpdateStatus: Equatable, Sendable {
     case available(AppRelease)
     case downloading(progress: Double, bytesWritten: Int64, totalBytes: Int64)
     case readyToInstall(dmgURL: URL)
+    case installing(message: String)
     case failed(error: String)
 
     public static func == (lhs: UpdateStatus, rhs: UpdateStatus) -> Bool {
@@ -128,6 +129,8 @@ public enum UpdateStatus: Equatable, Sendable {
             return p1 == p2 && b1 == b2 && t1 == t2
         case let (.readyToInstall(u1), .readyToInstall(u2)):
             return u1 == u2
+        case let (.installing(m1), .installing(m2)):
+            return m1 == m2
         case let (.failed(e1), .failed(e2)):
             return e1 == e2
         default:
@@ -255,21 +258,139 @@ public final class UpdateService: ObservableObject {
                     return
                 }
 
-                // Move downloaded file to Downloads folder
-                let downloadsFolder = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
-                    ?? FileManager.default.temporaryDirectory
-                let destinationUrl = downloadsFolder.appendingPathComponent(asset.name)
+                // Move downloaded file to temporary directory
+                let tempFolder = FileManager.default.temporaryDirectory
+                let destinationUrl = tempFolder.appendingPathComponent("anotherMusic_update_\(UUID().uuidString).dmg")
 
                 try? FileManager.default.removeItem(at: destinationUrl)
                 try FileManager.default.moveItem(at: tempUrl, to: destinationUrl)
 
                 self.status = .readyToInstall(dmgURL: destinationUrl)
 
-                // Mount / open the disk image
-                NSWorkspace.shared.open(destinationUrl)
-                NSWorkspace.shared.activateFileViewerSelecting([destinationUrl])
+                // Seamlessly auto-install, close running app, and relaunch new version
+                self.performAutoInstallAndRelaunch(dmgURL: destinationUrl)
             } catch {
                 if !Task.isCancelled {
+                    self.status = .failed(error: error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    /// Automatically installs the update from the downloaded DMG, closes this app, and relaunches the new version.
+    public func performAutoInstallAndRelaunch(dmgURL: URL) {
+        self.status = .installing(message: "Installing update & restarting...")
+
+        Task.detached(priority: .userInitiated) {
+            let pid = ProcessInfo.processInfo.processIdentifier
+            let fileManager = FileManager.default
+
+            let runningPath = await MainActor.run { Bundle.main.bundlePath }
+            let targetAppPath: String
+            if runningPath.hasPrefix("/Volumes/") || runningPath.contains("/.build/") {
+                targetAppPath = "/Applications/anotherMusic.app"
+            } else {
+                targetAppPath = runningPath
+            }
+
+            let stagingDir = fileManager.temporaryDirectory.appendingPathComponent("anotherMusic_staged_\(UUID().uuidString)")
+            let mountDir = fileManager.temporaryDirectory.appendingPathComponent("anotherMusic_mount_\(UUID().uuidString)")
+
+            do {
+                try? fileManager.removeItem(at: stagingDir)
+                try? fileManager.removeItem(at: mountDir)
+                try fileManager.createDirectory(at: stagingDir, withIntermediateDirectories: true)
+                try fileManager.createDirectory(at: mountDir, withIntermediateDirectories: true)
+
+                // 1. Mount DMG silently without opening Finder
+                let mountProcess = Process()
+                mountProcess.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+                mountProcess.arguments = ["attach", dmgURL.path, "-nobrowse", "-readonly", "-mountpoint", mountDir.path]
+                try mountProcess.run()
+                mountProcess.waitUntilExit()
+
+                guard mountProcess.terminationStatus == 0 else {
+                    throw NSError(domain: "UpdateService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to mount update image."])
+                }
+
+                // 2. Locate .app inside mount point
+                let contents = try fileManager.contentsOfDirectory(atPath: mountDir.path)
+                guard let appName = contents.first(where: { $0.hasSuffix(".app") }) else {
+                    let unmountProcess = Process()
+                    unmountProcess.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+                    unmountProcess.arguments = ["detach", mountDir.path, "-force"]
+                    try? unmountProcess.run()
+                    throw NSError(domain: "UpdateService", code: 2, userInfo: [NSLocalizedDescriptionKey: "No application found in update package."])
+                }
+
+                let sourceApp = mountDir.appendingPathComponent(appName)
+                let stagedApp = stagingDir.appendingPathComponent(appName)
+
+                // 3. Copy app to staging directory
+                let copyProcess = Process()
+                copyProcess.executableURL = URL(fileURLWithPath: "/bin/cp")
+                copyProcess.arguments = ["-R", sourceApp.path, stagedApp.path]
+                try copyProcess.run()
+                copyProcess.waitUntilExit()
+
+                // 4. Detach DMG and delete downloaded file
+                let unmountProcess = Process()
+                unmountProcess.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+                unmountProcess.arguments = ["detach", mountDir.path, "-force"]
+                try? unmountProcess.run()
+                unmountProcess.waitUntilExit()
+                try? fileManager.removeItem(at: mountDir)
+                try? fileManager.removeItem(at: dmgURL)
+
+                // 5. Create detached updater script
+                let scriptPath = fileManager.temporaryDirectory.appendingPathComponent("anothermusic_updater_\(pid).sh")
+                let scriptContent = """
+                #!/bin/sh
+                PID=\(pid)
+                SRC="\(stagedApp.path)"
+                DST="\(targetAppPath)"
+                STAGING="\(stagingDir.path)"
+                SCRIPT="$0"
+
+                # Wait up to 15 seconds for host app to exit
+                for i in $(seq 1 150); do
+                    if ! kill -0 $PID 2>/dev/null; then
+                        break
+                    fi
+                    sleep 0.1
+                done
+
+                # Atomically replace application bundle
+                rm -rf "$DST"
+                cp -R "$SRC" "$DST"
+                xattr -rd com.apple.quarantine "$DST" 2>/dev/null || true
+                rm -rf "$STAGING"
+
+                # Relaunch updated application
+                sleep 0.2
+                open "$DST"
+
+                # Self-remove script
+                rm -f "$SCRIPT"
+                exit 0
+                """
+
+                try scriptContent.write(to: scriptPath, atomically: true, encoding: .utf8)
+                try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptPath.path)
+
+                // 6. Launch updater script in background detached
+                let launchProcess = Process()
+                launchProcess.executableURL = URL(fileURLWithPath: "/bin/sh")
+                launchProcess.arguments = [scriptPath.path]
+                try launchProcess.run()
+
+                // 7. Terminate current application cleanly
+                try await Task.sleep(nanoseconds: 350_000_000)
+                await MainActor.run {
+                    NSApp.terminate(nil)
+                }
+            } catch {
+                await MainActor.run {
                     self.status = .failed(error: error.localizedDescription)
                 }
             }

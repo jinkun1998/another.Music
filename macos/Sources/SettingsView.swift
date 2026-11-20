@@ -514,8 +514,10 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return "Version \(release.tagName) is available to install"
         case let .downloading(prog, _, _):
             return "Downloading update... \(Int(prog * 100))%"
+        case let .installing(msg):
+            return msg
         case .readyToInstall:
-            return "Update downloaded and disk image mounted"
+            return "Update downloaded and ready to install"
         case let .failed(err):
             return "Check failed: \(err)"
         case .idle:

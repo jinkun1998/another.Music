@@ -127,20 +127,31 @@ public struct UpdateSheetView: View {
                     }
                     .padding(.top, 4)
 
+                case let .installing(message):
+                    HStack(spacing: 12) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text(message)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.white)
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+
                 case let .readyToInstall(dmgUrl):
                     HStack(spacing: 10) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 18))
                             .foregroundColor(.green)
 
-                        Text("Disk image mounted. Drag anotherMusic to Applications to finish!")
+                        Text("Update ready to install.")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.white.opacity(0.9))
 
                         Spacer()
 
-                        Button("Reveal in Finder") {
-                            NSWorkspace.shared.activateFileViewerSelecting([dmgUrl])
+                        Button("Restart & Install") {
+                            updater.performAutoInstallAndRelaunch(dmgURL: dmgUrl)
                         }
                         .buttonStyle(.borderedProminent)
                     }
