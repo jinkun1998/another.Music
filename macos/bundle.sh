@@ -17,10 +17,19 @@ fi
 APP_BUILD="${APP_BUILD:-${ANDROID_BUILD:-1}}"
 echo "==> Target Version: ${APP_VERSION} (build ${APP_BUILD})"
 
-echo "==> Building native macOS binary (release)..."
-swift build -c release
+CONFIG="release"
+CONFIG_ARG="-c release"
+CONFIG_DIR="Release"
+if [ "$1" == "debug" ] || [ "$2" == "debug" ]; then
+    CONFIG="debug"
+    CONFIG_ARG=""
+    CONFIG_DIR="Debug"
+fi
 
-BIN="$DIR/.build/out/Products/Release/anotherMusic"
+echo "==> Building native macOS binary (${CONFIG})..."
+swift build $CONFIG_ARG
+
+BIN="$DIR/.build/out/Products/${CONFIG_DIR}/anotherMusic"
 APP="$DIR/build/anotherMusic.app"
 
 echo "==> Creating macOS application bundle: $APP"
@@ -102,7 +111,7 @@ if [ "$1" == "dmg" ]; then
     echo "==> Versioned DMG: $VERSIONED_DMG"
 fi
 
-if [ "$1" == "run" ]; then
+if [ "$1" == "run" ] || [ "$2" == "run" ]; then
     echo "==> Launching anotherMusic.app..."
     open "$APP"
 fi
