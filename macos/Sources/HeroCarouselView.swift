@@ -199,33 +199,52 @@ public struct GachaDieView: View {
     }
 }
 
+// MARK: - Gacha State (Hoisted to survive infinite loop swiping)
+public final class GachaState: ObservableObject {
+    @Published public var activeCandidates: [SongItem] = []
+    @Published public var reelPosition: Double = 0
+    @Published public var isRolling: Bool = false
+    @Published public var landedSong: SongItem? = nil
+    @Published public var pointerKick: CGFloat = 0
+    @Published public var landPopScale: CGFloat = 1.0
+    @Published public var hasRolled: Bool = false
+    public var rollTimer: Timer? = nil
+
+    public init() {}
+
+    public func reset() {
+        rollTimer?.invalidate()
+        rollTimer = nil
+        isRolling = false
+        landedSong = nil
+        reelPosition = 0
+        hasRolled = false
+    }
+}
+
 // MARK: - Gacha Card View
 public struct GachaCardView: View {
     public let candidates: [SongItem]
     public let isAudioPlaying: Bool
     public let currentPlayingTrackId: String?
+    @ObservedObject public var state: GachaState
     public let onPlayWonTrack: (SongItem, [SongItem]) -> Void
     public let onRollingStateChanged: ((Bool) -> Void)?
 
-    @State private var activeCandidates: [SongItem] = []
-    @State private var reelPosition: Double = 0
-    @State private var isRolling: Bool = false
-    @State private var landedSong: SongItem?
-    @State private var pointerKick: CGFloat = 0
-    @State private var landPopScale: CGFloat = 1.0
-    @State private var rollTimer: Timer?
     @State private var isHovered: Bool = false
 
     public init(
         candidates: [SongItem],
         isAudioPlaying: Bool = false,
         currentPlayingTrackId: String? = nil,
+        state: GachaState? = nil,
         onPlayWonTrack: @escaping (SongItem, [SongItem]) -> Void,
         onRollingStateChanged: ((Bool) -> Void)? = nil
     ) {
         self.candidates = candidates
         self.isAudioPlaying = isAudioPlaying
         self.currentPlayingTrackId = currentPlayingTrackId
+        self.state = state ?? GachaState()
         self.onPlayWonTrack = onPlayWonTrack
         self.onRollingStateChanged = onRollingStateChanged
     }
@@ -259,7 +278,7 @@ public struct GachaCardView: View {
                     .lineLimit(2)
                     .shadow(color: Color.black.opacity(0.6), radius: 8, x: 0, y: 3)
 
-                if let landed = landedSong, !isRolling {
+                if let landed = state.landedSong, !state.isRolling {
                     Text(landed.artist)
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.white.opacity(0.80))
@@ -271,9 +290,9 @@ public struct GachaCardView: View {
                 // Action Pill: roll!!
                 Button(action: { startRoll() }) {
                     HStack(spacing: 8) {
-                        GachaDieView(spinning: isRolling)
+                        GachaDieView(spinning: state.isRolling)
 
-                        Text(isRolling ? "rolling!!" : "roll!!")
+                        Text(state.isRolling ? "rolling!!" : "roll!!")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(Color(red: 0.18, green: 0.18, blue: 0.18))
                     }
@@ -281,12 +300,12 @@ public struct GachaCardView: View {
                     .frame(height: 34)
                     .background(
                         Capsule()
-                            .fill(Color.white.opacity(isRolling ? 0.45 : 0.68))
+                            .fill(Color.white.opacity(state.isRolling ? 0.45 : 0.68))
                     )
-                    .scaleEffect(isHovered && !isRolling ? 1.04 : 1.0)
+                    .scaleEffect(isHovered && !state.isRolling ? 1.04 : 1.0)
                 }
                 .buttonStyle(.plain)
-                .disabled(isRolling || effectiveCandidates.isEmpty)
+                .disabled(state.isRolling || effectiveCandidates.isEmpty)
             }
             .padding(.horizontal, 32)
             .padding(.bottom, 26)
@@ -301,49 +320,45 @@ public struct GachaCardView: View {
         .shadow(color: Color.black.opacity(0.35), radius: 18, x: 0, y: 8)
         .onHover { isHovered = $0 }
         .onAppear {
-            if activeCandidates.isEmpty && !candidates.isEmpty {
-                activeCandidates = candidates
+            if state.activeCandidates.isEmpty && !candidates.isEmpty {
+                state.activeCandidates = candidates
             }
         }
         .onChange(of: candidates) { _, newCandidates in
             // Android Mochy rule: reel covers are picked once and never shuffled while rolling or landed/playing!
-            guard !isRolling, landedSong == nil else { return }
+            guard !state.isRolling, state.landedSong == nil else { return }
             if !newCandidates.isEmpty {
-                activeCandidates = newCandidates
+                state.activeCandidates = newCandidates
             }
-        }
-        .onDisappear {
-            rollTimer?.invalidate()
-            rollTimer = nil
         }
     }
 
     private var effectiveCandidates: [SongItem] {
-        activeCandidates.isEmpty ? candidates : activeCandidates
+        state.activeCandidates.isEmpty ? candidates : state.activeCandidates
     }
 
     private var isCurrentlyPlayingResult: Bool {
-        isAudioPlaying && landedSong != nil && currentPlayingTrackId == landedSong?.id
+        isAudioPlaying && state.landedSong != nil && currentPlayingTrackId == state.landedSong?.id
     }
 
     private var gachaLabelText: String {
-        if isRolling {
+        if state.isRolling {
             return "Rolling..."
         }
         if isCurrentlyPlayingResult {
             return "Now playing"
         }
-        if landedSong != nil {
+        if state.landedSong != nil {
             return "You got"
         }
         return "Gacha here!"
     }
 
     private var gachaTitleText: String {
-        if isRolling {
+        if state.isRolling {
             return "Spinning reel..."
         }
-        if let landed = landedSong {
+        if let landed = state.landedSong {
             return landed.title
         }
         return "Random plays"
@@ -366,7 +381,7 @@ public struct GachaCardView: View {
             // Dynamic lit bloom
             RadialGradient(
                 colors: [
-                    Color(red: 0.88, green: 0.58, blue: 0.65).opacity(isRolling ? 0.45 : 0.32),
+                    Color(red: 0.88, green: 0.58, blue: 0.65).opacity(state.isRolling ? 0.45 : 0.32),
                     Color(red: 0.55, green: 0.45, blue: 0.72).opacity(0.20),
                     Color.clear
                 ],
@@ -411,11 +426,11 @@ public struct GachaCardView: View {
                 .font(.system(size: 26, weight: .bold))
                 .foregroundColor(pointerColor)
                 .shadow(color: pointerColor.opacity(0.5), radius: 8, x: 0, y: 0)
-                .offset(x: -pointerKick * 7.0)
-                .rotationEffect(.degrees(-Double(pointerKick * 8.0)))
-                .scaleEffect(landPopScale > 1.0 ? 1.20 : 1.0)
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: pointerKick)
-                .animation(.spring(response: 0.4, dampingFraction: 0.6), value: landPopScale)
+                .offset(x: -state.pointerKick * 7.0)
+                .rotationEffect(.degrees(-Double(state.pointerKick * 8.0)))
+                .scaleEffect(state.landPopScale > 1.0 ? 1.20 : 1.0)
+                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: state.pointerKick)
+                .animation(.spring(response: 0.4, dampingFraction: 0.6), value: state.landPopScale)
                 .offset(x: -125, y: 0)
         }
     }
@@ -427,12 +442,12 @@ public struct GachaCardView: View {
 
         ZStack {
             ForEach(Array(pool.enumerated()), id: \.element.id) { index, song in
-                let d = reelDistance(index: index, reel: reelPosition, count: count)
+                let d = reelDistance(index: index, reel: state.reelPosition, count: count)
                 if abs(d) <= 2.6 {
                     let near = max(0, 1.0 - abs(d))
                     let scale = (170.0 + (215.0 - 170.0) * near) / 215.0
                     let isCenter = near > 0.65
-                    let pop = isCenter ? landPopScale : 1.0
+                    let pop = isCenter ? state.landPopScale : 1.0
                     let slotY = d * 185.0
 
                     CachedAsyncImage(
@@ -469,7 +484,7 @@ public struct GachaCardView: View {
                     .offset(x: 28, y: slotY)
                     .opacity(max(0, min(1.0, 2.5 - abs(d))))
                     .onTapGesture {
-                        if !isRolling {
+                        if !state.isRolling {
                             startRoll()
                         }
                     }
@@ -490,9 +505,10 @@ public struct GachaCardView: View {
 
     private func startRoll() {
         let pool = effectiveCandidates
-        guard !isRolling, !pool.isEmpty else { return }
-        isRolling = true
-        landedSong = nil
+        guard !state.isRolling, !pool.isEmpty else { return }
+        state.isRolling = true
+        state.landedSong = nil
+        state.hasRolled = true
         onRollingStateChanged?(true)
         GachaSounds.shared.prepare()
 
@@ -500,16 +516,16 @@ public struct GachaCardView: View {
         guard count > 0 else { return }
         let targetIndex = Int.random(in: 0..<count)
         let fullRevolutions = 3
-        let currentNormalized = reelPosition.truncatingRemainder(dividingBy: Double(count))
+        let currentNormalized = state.reelPosition.truncatingRemainder(dividingBy: Double(count))
         var stepDiff = Double(targetIndex) - currentNormalized
         if stepDiff <= 0 { stepDiff += Double(count) }
-        let targetReel = reelPosition + Double(fullRevolutions * count) + stepDiff
+        let targetReel = state.reelPosition + Double(fullRevolutions * count) + stepDiff
         let duration: Double = 4.0
         let startTime = ProcessInfo.processInfo.systemUptime
-        let startReel = reelPosition
+        let startReel = state.reelPosition
         var lastCrossedIndex = Int(floor(startReel))
 
-        rollTimer?.invalidate()
+        state.rollTimer?.invalidate()
         let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { t in
             let elapsed = ProcessInfo.processInfo.systemUptime - startTime
             let progress = min(1.0, elapsed / duration)
@@ -517,36 +533,36 @@ public struct GachaCardView: View {
             // Cubic bezier roll easing matching Android (0.15, 0.45, 0.2, 1.0)
             let eased = cubicBezier(t: progress, p1x: 0.15, p1y: 0.45, p2x: 0.2, p2y: 1.0)
             let current = startReel + (targetReel - startReel) * eased
-            self.reelPosition = current
+            self.state.reelPosition = current
 
             let currentInt = Int(floor(current))
             if currentInt != lastCrossedIndex {
                 lastCrossedIndex = currentInt
                 GachaSounds.shared.tick()
-                self.pointerKick = 1.0
+                self.state.pointerKick = 1.0
                 withAnimation(.spring(response: 0.15, dampingFraction: 0.5)) {
-                    self.pointerKick = 0.0
+                    self.state.pointerKick = 0.0
                 }
             }
 
             if progress >= 1.0 {
                 t.invalidate()
-                self.rollTimer = nil
-                self.reelPosition = targetReel
-                self.isRolling = false
+                self.state.rollTimer = nil
+                self.state.reelPosition = targetReel
+                self.state.isRolling = false
                 self.onRollingStateChanged?(false)
 
                 let wonSong = pool[targetIndex % count]
-                self.landedSong = wonSong
+                self.state.landedSong = wonSong
 
                 GachaSounds.shared.win()
 
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.45)) {
-                    self.landPopScale = 1.16
+                    self.state.landPopScale = 1.16
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-                        self.landPopScale = 1.0
+                        self.state.landPopScale = 1.0
                     }
                 }
 
@@ -555,7 +571,7 @@ public struct GachaCardView: View {
             }
         }
         RunLoop.main.add(timer, forMode: .common)
-        self.rollTimer = timer
+        state.rollTimer = timer
     }
 
     // Cubic bezier ease-out implementation
@@ -804,10 +820,11 @@ public struct HeroCarouselView: View {
     public let onTogglePauseResume: () -> Void
     public let onNavigateCollection: (SongItem) -> Void
 
-    @State private var activeCardId: String?
+    @StateObject private var gachaState = GachaState()
+    @State private var activePageIndex: Int?
     @State private var isCarouselHovered: Bool = false
-    @State private var isGachaRolling: Bool = false
-    @State private var gachaHasRolled: Bool = false
+
+    private let loopMultiplier = 400
 
     public init(
         cards: [HeroCardModel],
@@ -825,11 +842,21 @@ public struct HeroCarouselView: View {
         self.onPlaySong = onPlaySong
         self.onTogglePauseResume = onTogglePauseResume
         self.onNavigateCollection = onNavigateCollection
+
+        let initPage = cards.count > 1 ? (400 / 2) * cards.count : 0
+        self._activePageIndex = State(initialValue: initPage)
+    }
+
+    private var initialPage: Int {
+        guard !cards.isEmpty else { return 0 }
+        return (loopMultiplier / 2) * cards.count
     }
 
     private var currentIndex: Int {
-        guard let activeCardId else { return 0 }
-        return cards.firstIndex(where: { $0.id == activeCardId }) ?? 0
+        guard !cards.isEmpty else { return 0 }
+        let page = activePageIndex ?? initialPage
+        let count = cards.count
+        return ((page % count) + count) % count
     }
 
     public var body: some View {
@@ -848,54 +875,29 @@ public struct HeroCarouselView: View {
                 ScrollViewReader { scrollProxy in
                     ZStack(alignment: .top) {
                         VStack(spacing: 12) {
-                            // Native macOS Horizontal ScrollView with ViewAligned snapping
+                            // Native macOS Horizontal ScrollView with ViewAligned snapping & Infinite Looping
                             ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: cardSpacing) {
-                                    ForEach(cards) { card in
-                                        Group {
-                                            if card.kind == .gacha {
-                                                GachaCardView(
-                                                    candidates: gachaCandidates,
-                                                    isAudioPlaying: isAudioPlaying,
-                                                    currentPlayingTrackId: currentPlayingTrackId,
-                                                    onPlayWonTrack: { wonSong, pool in
-                                                        self.gachaHasRolled = true
-                                                        onPlaySong(wonSong, pool)
-                                                    },
-                                                    onRollingStateChanged: { rolling in
-                                                        self.isGachaRolling = rolling
-                                                        if rolling {
-                                                            self.gachaHasRolled = true
-                                                        }
-                                                    }
-                                                )
-                                            } else {
-                                                let isThisCardPlaying = isAudioPlaying && (card.songItem?.id == currentPlayingTrackId)
-                                                HeroCardView(
-                                                    card: card,
-                                                    isPlaying: isThisCardPlaying,
-                                                    onPlay: { song in
-                                                        if card.songItem?.id == currentPlayingTrackId {
-                                                            onTogglePauseResume()
-                                                        } else {
-                                                            onPlaySong(song, [song])
-                                                        }
-                                                    },
-                                                    onNavigate: { song in
-                                                        onNavigateCollection(song)
-                                                    }
-                                                )
-                                            }
+                                LazyHStack(spacing: cardSpacing) {
+                                    if cards.count <= 1 {
+                                        if let first = cards.first {
+                                            cardContent(for: first)
+                                                .frame(width: cardW, height: cardH)
+                                                .id(0)
                                         }
-                                        .frame(width: cardW, height: cardH)
-                                        .id(card.id)
+                                    } else {
+                                        ForEach(0..<(loopMultiplier * cards.count), id: \.self) { pageIndex in
+                                            let cardIndex = pageIndex % cards.count
+                                            cardContent(for: cards[cardIndex])
+                                                .frame(width: cardW, height: cardH)
+                                                .id(pageIndex)
+                                        }
                                     }
                                 }
                                 .scrollTargetLayout()
                             }
                             .scrollTargetBehavior(.viewAligned)
                             .safeAreaPadding(.horizontal, sideInset)
-                            .scrollPosition(id: $activeCardId)
+                            .scrollPosition(id: $activePageIndex)
                             .simultaneousGesture(
                                 DragGesture(minimumDistance: 25)
                                     .onEnded { value in
@@ -915,11 +917,7 @@ public struct HeroCarouselView: View {
                                         .frame(width: idx == currentIndex ? 24 : 6, height: 6)
                                         .animation(.spring(response: 0.35, dampingFraction: 0.75), value: currentIndex)
                                         .onTapGesture {
-                                            let targetId = cards[idx].id
-                                            withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                                                activeCardId = targetId
-                                                scrollProxy.scrollTo(targetId, anchor: .center)
-                                            }
+                                            jumpTo(cardIndex: idx, proxy: scrollProxy)
                                         }
                                 }
                             }
@@ -929,44 +927,40 @@ public struct HeroCarouselView: View {
                             .clipShape(Capsule())
                         }
 
-                        // Desktop Navigation Chevrons
+                        // Desktop Navigation Chevrons (both always active in infinite loop!)
                         if isCarouselHovered && cards.count > 1 {
                             HStack {
-                                if currentIndex > 0 {
-                                    Button(action: {
-                                        advancePrev(proxy: scrollProxy)
-                                    }) {
-                                        Image(systemName: "chevron.left")
-                                            .font(.system(size: 16, weight: .bold))
-                                            .foregroundColor(.white)
-                                            .frame(width: 40, height: 40)
-                                            .background(.ultraThinMaterial)
-                                            .clipShape(Circle())
-                                            .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
-                                            .shadow(color: Color.black.opacity(0.4), radius: 8, x: 0, y: 4)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .padding(.leading, max(14, sideInset - 22))
+                                Button(action: {
+                                    advancePrev(proxy: scrollProxy)
+                                }) {
+                                    Image(systemName: "chevron.left")
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .frame(width: 40, height: 40)
+                                        .background(.ultraThinMaterial)
+                                        .clipShape(Circle())
+                                        .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
+                                        .shadow(color: Color.black.opacity(0.4), radius: 8, x: 0, y: 4)
                                 }
+                                .buttonStyle(.plain)
+                                .padding(.leading, max(14, sideInset - 22))
 
                                 Spacer()
 
-                                if currentIndex < cards.count - 1 {
-                                    Button(action: {
-                                        advanceNext(proxy: scrollProxy)
-                                    }) {
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 16, weight: .bold))
-                                            .foregroundColor(.white)
-                                            .frame(width: 40, height: 40)
-                                            .background(.ultraThinMaterial)
-                                            .clipShape(Circle())
-                                            .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
-                                            .shadow(color: Color.black.opacity(0.4), radius: 8, x: 0, y: 4)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .padding(.trailing, max(14, sideInset - 22))
+                                Button(action: {
+                                    advanceNext(proxy: scrollProxy)
+                                }) {
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .frame(width: 40, height: 40)
+                                        .background(.ultraThinMaterial)
+                                        .clipShape(Circle())
+                                        .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
+                                        .shadow(color: Color.black.opacity(0.4), radius: 8, x: 0, y: 4)
                                 }
+                                .buttonStyle(.plain)
+                                .padding(.trailing, max(14, sideInset - 22))
                             }
                             .frame(height: cardH)
                             .transition(.opacity)
@@ -977,15 +971,28 @@ public struct HeroCarouselView: View {
                         isCarouselHovered = hovering
                     }
                     .onAppear {
-                        if activeCardId == nil {
-                            activeCardId = cards.first?.id
+                        if activePageIndex == nil {
+                            let initPage = initialPage
+                            activePageIndex = initPage
+                            scrollProxy.scrollTo(initPage, anchor: .center)
                         }
                     }
-                    .task(id: "\(isAudioPlaying)_\(isGachaRolling)_\(isCarouselHovered)_\(gachaHasRolled)_\(activeCardId ?? "")") {
+                    .onChange(of: activePageIndex) { _, newPage in
+                        guard let newPage, cards.count > 1 else { return }
+                        let count = cards.count
+                        let minBound = 50 * count
+                        let maxBound = (loopMultiplier - 50) * count
+                        if newPage < minBound || newPage > maxBound {
+                            let cardIdx = ((newPage % count) + count) % count
+                            let centerBase = (loopMultiplier / 2) * count
+                            activePageIndex = centerBase + cardIdx
+                        }
+                    }
+                    .task(id: "\(isAudioPlaying)_\(gachaState.isRolling)_\(isCarouselHovered)_\(gachaState.hasRolled)_\(activePageIndex ?? 0)") {
                         // Android Mochy rule: do not auto-advance if audio is playing, gacha is rolling, user is hovering, or on gacha card after rolling
-                        guard !isAudioPlaying, !isGachaRolling, !isCarouselHovered, cards.count > 1 else { return }
+                        guard !isAudioPlaying, !gachaState.isRolling, !isCarouselHovered, cards.count > 1 else { return }
                         let onGacha = (currentIndex < cards.count) && cards[currentIndex].kind == .gacha
-                        if onGacha && gachaHasRolled { return }
+                        if onGacha && gachaState.hasRolled { return }
 
                         do {
                             try await Task.sleep(nanoseconds: 5_500_000_000)
@@ -1001,22 +1008,74 @@ public struct HeroCarouselView: View {
         )
     }
 
+    @ViewBuilder
+    private func cardContent(for card: HeroCardModel) -> some View {
+        if card.kind == .gacha {
+            GachaCardView(
+                candidates: gachaCandidates,
+                isAudioPlaying: isAudioPlaying,
+                currentPlayingTrackId: currentPlayingTrackId,
+                state: gachaState,
+                onPlayWonTrack: { wonSong, pool in
+                    onPlaySong(wonSong, pool)
+                },
+                onRollingStateChanged: { rolling in
+                    // Handled inside gachaState
+                }
+            )
+        } else {
+            let isThisCardPlaying = isAudioPlaying && (card.songItem?.id == currentPlayingTrackId)
+            HeroCardView(
+                card: card,
+                isPlaying: isThisCardPlaying,
+                onPlay: { song in
+                    if card.songItem?.id == currentPlayingTrackId {
+                        onTogglePauseResume()
+                    } else {
+                        onPlaySong(song, [song])
+                    }
+                },
+                onNavigate: { song in
+                    onNavigateCollection(song)
+                }
+            )
+        }
+    }
+
     private func advanceNext(proxy: ScrollViewProxy) {
         guard !cards.isEmpty else { return }
-        let nextIdx = (currentIndex + 1) % cards.count
-        let nextId = cards[nextIdx].id
+        let current = activePageIndex ?? initialPage
+        let next = current + 1
         withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-            activeCardId = nextId
-            proxy.scrollTo(nextId, anchor: .center)
+            activePageIndex = next
+            proxy.scrollTo(next, anchor: .center)
         }
     }
 
     private func advancePrev(proxy: ScrollViewProxy) {
-        guard currentIndex > 0 else { return }
-        let prevId = cards[currentIndex - 1].id
+        guard !cards.isEmpty else { return }
+        let current = activePageIndex ?? initialPage
+        let prev = current - 1
         withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-            activeCardId = prevId
-            proxy.scrollTo(prevId, anchor: .center)
+            activePageIndex = prev
+            proxy.scrollTo(prev, anchor: .center)
+        }
+    }
+
+    private func jumpTo(cardIndex: Int, proxy: ScrollViewProxy) {
+        guard !cards.isEmpty else { return }
+        let count = cards.count
+        let curr = currentIndex
+        var diff = cardIndex - curr
+        if diff > count / 2 {
+            diff -= count
+        } else if diff < -count / 2 {
+            diff += count
+        }
+        let targetPage = (activePageIndex ?? initialPage) + diff
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+            activePageIndex = targetPage
+            proxy.scrollTo(targetPage, anchor: .center)
         }
     }
 }
