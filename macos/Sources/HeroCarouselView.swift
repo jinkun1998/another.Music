@@ -230,87 +230,82 @@ public struct GachaCardView: View {
     }
 
     public var body: some View {
-        GeometryReader { proxy in
-            let w = proxy.size.width
-            let h = proxy.size.height
+        ZStack {
+            // Background Dynamic Mesh Wash
+            gachaBackgroundWash()
 
-            ZStack {
-                // Background Dynamic Mesh Wash
-                gachaBackgroundWash(width: w, height: h)
-
-                // Reel covers column on right
-                if !candidates.isEmpty {
-                    reelCoversColumn(width: w, height: h)
-                }
-
-                // Coral Pointer aimed at center
-                coralPointerIndicator(width: w, height: h)
-
-                // Text & Pill on bottom-left
-                VStack(alignment: .leading, spacing: 10) {
-                    Spacer()
-
-                    // Badge label
-                    HStack(spacing: 6) {
-                        Text(gachaLabelText.uppercased())
-                            .font(.system(size: 11, weight: .bold))
-                            .tracking(0.9)
-                            .foregroundColor(.white.opacity(0.85))
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Color.black.opacity(0.35))
-                    .clipShape(Capsule())
-
-                    // Title
-                    Text(gachaTitleText)
-                        .font(.system(size: 30, weight: .heavy, design: .rounded))
-                        .foregroundColor(.white)
-                        .lineLimit(2)
-                        .shadow(color: Color.black.opacity(0.6), radius: 8, x: 0, y: 3)
-
-                    if let landed = landedSong, !isRolling {
-                        Text(landed.artist)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(.white.opacity(0.80))
-                            .lineLimit(1)
-                    }
-
-                    Spacer().frame(height: 6)
-
-                    // Action Pill: roll!!
-                    Button(action: { startRoll() }) {
-                        HStack(spacing: 8) {
-                            GachaDieView(spinning: isRolling)
-
-                            Text(isRolling ? "rolling!!" : "roll!!")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(Color(red: 0.16, green: 0.16, blue: 0.16))
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(
-                            Capsule()
-                                .fill(Color.white.opacity(isRolling ? 0.70 : 0.92))
-                        )
-                        .shadow(color: Color.black.opacity(0.3), radius: 10, x: 0, y: 4)
-                        .scaleEffect(isHovered && !isRolling ? 1.04 : 1.0)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isRolling || candidates.isEmpty)
-                }
-                .padding(.horizontal, 36)
-                .padding(.bottom, 32)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            // Reel covers column on right
+            if !candidates.isEmpty {
+                reelCoversColumn()
             }
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
-            )
-            .shadow(color: Color.black.opacity(0.40), radius: 20, x: 0, y: 8)
-            .onHover { isHovered = $0 }
+
+            // Coral Pointer aimed at center
+            coralPointerIndicator()
+
+            // Text & Pill on bottom-left
+            VStack(alignment: .leading, spacing: 8) {
+                Spacer()
+
+                // Badge label
+                HStack(spacing: 6) {
+                    Text(gachaLabelText.uppercased())
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(0.9)
+                        .foregroundColor(.white.opacity(0.85))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Color.black.opacity(0.35))
+                .clipShape(Capsule())
+
+                // Title
+                Text(gachaTitleText)
+                    .font(.system(size: 28, weight: .heavy, design: .rounded))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+                    .shadow(color: Color.black.opacity(0.6), radius: 8, x: 0, y: 3)
+
+                if let landed = landedSong, !isRolling {
+                    Text(landed.artist)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white.opacity(0.80))
+                        .lineLimit(1)
+                }
+
+                Spacer().frame(height: 6)
+
+                // Action Pill: roll!!
+                Button(action: { startRoll() }) {
+                    HStack(spacing: 8) {
+                        GachaDieView(spinning: isRolling)
+
+                        Text(isRolling ? "rolling!!" : "roll!!")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(Color(red: 0.16, green: 0.16, blue: 0.16))
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(
+                        Capsule()
+                            .fill(Color.white.opacity(isRolling ? 0.70 : 0.94))
+                    )
+                    .shadow(color: Color.black.opacity(0.3), radius: 10, x: 0, y: 4)
+                    .scaleEffect(isHovered && !isRolling ? 1.04 : 1.0)
+                }
+                .buttonStyle(.plain)
+                .disabled(isRolling || candidates.isEmpty)
+            }
+            .padding(.horizontal, 32)
+            .padding(.bottom, 26)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.40), radius: 20, x: 0, y: 8)
+        .onHover { isHovered = $0 }
     }
 
     private var gachaLabelText: String {
@@ -337,7 +332,7 @@ public struct GachaCardView: View {
     }
 
     @ViewBuilder
-    private func gachaBackgroundWash(width: CGFloat, height: CGFloat) -> some View {
+    private func gachaBackgroundWash() -> some View {
         ZStack {
             // Base deep wash
             LinearGradient(
@@ -359,7 +354,7 @@ public struct GachaCardView: View {
                 ],
                 center: .topTrailing,
                 startRadius: 40,
-                endRadius: width * 0.75
+                endRadius: 650
             )
 
             // Text readability dark scrim on left
@@ -388,7 +383,7 @@ public struct GachaCardView: View {
     }
 
     @ViewBuilder
-    private func coralPointerIndicator(width: CGFloat, height: CGFloat) -> some View {
+    private func coralPointerIndicator() -> some View {
         let pointerColor = Color(red: 0.94, green: 0.56, blue: 0.55)
 
         HStack {
@@ -405,11 +400,10 @@ public struct GachaCardView: View {
                 .animation(.spring(response: 0.4, dampingFraction: 0.6), value: landPopScale)
                 .offset(x: -125, y: 0)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder
-    private func reelCoversColumn(width: CGFloat, height: CGFloat) -> some View {
+    private func reelCoversColumn() -> some View {
         let count = candidates.count
 
         ZStack {
@@ -463,7 +457,7 @@ public struct GachaCardView: View {
                 }
             }
         }
-        .frame(width: 260, height: height, alignment: .trailing)
+        .frame(width: 260)
         .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
@@ -593,156 +587,149 @@ public struct HeroCardView: View {
     }
 
     public var body: some View {
-        GeometryReader { proxy in
-            let w = proxy.size.width
-            let h = proxy.size.height
-
-            ZStack {
-                // High-resolution Artwork Background
-                if let thumb = card.thumbnailUrl, !thumb.isEmpty {
-                    CachedAsyncImage(
-                        urlString: thumb.ytResize(width: 1200, height: 1200),
-                        content: { image in
-                            image.resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: w, height: h)
-                                .clipped()
-                        },
-                        placeholder: {
-                            Color(red: 0.12, green: 0.12, blue: 0.16)
-                        }
-                    )
-                } else {
-                    LinearGradient(
-                        colors: [Color(red: 0.18, green: 0.20, blue: 0.28), Color.black],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                }
-
-                // Scrim Gradients for crisp typography
-                // Top scrim for seed badge
-                LinearGradient(
-                    stops: [
-                        .init(color: Color.black.opacity(0.60), location: 0.0),
-                        .init(color: Color.clear, location: 0.35)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
+        ZStack {
+            // High-resolution Artwork Background
+            if let thumb = card.thumbnailUrl, !thumb.isEmpty {
+                CachedAsyncImage(
+                    urlString: thumb.ytResize(width: 1200, height: 1200),
+                    content: { image in
+                        image.resizable()
+                            .aspectRatio(contentMode: .fill)
+                    },
+                    placeholder: {
+                        Color(red: 0.12, green: 0.12, blue: 0.16)
+                    }
                 )
-
-                // Bottom heavy scrim for title, subtitle, and pill
+            } else {
                 LinearGradient(
-                    stops: [
-                        .init(color: Color.clear, location: 0.22),
-                        .init(color: Color.black.opacity(0.48), location: 0.58),
-                        .init(color: Color.black.opacity(0.92), location: 1.0)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
+                    colors: [Color(red: 0.18, green: 0.20, blue: 0.28), Color.black],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
-
-                // Foreground Content
-                VStack(alignment: .leading, spacing: 8) {
-                    Spacer()
-
-                    // Seed Label Badge
-                    let label = card.label(isPlaying: isPlaying)
-                    HStack(spacing: 8) {
-                        if let seedCover = label.coverUrl, !seedCover.isEmpty {
-                            CachedAsyncImage(
-                                urlString: seedCover.ytResize(width: 80, height: 80),
-                                content: { img in
-                                    if label.roundCover {
-                                        img.resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                            .frame(width: 20, height: 20)
-                                            .clipShape(Circle())
-                                    } else {
-                                        img.resizable()
-                                            .aspectRatio(contentMode: .fill)
-                                            .frame(width: 20, height: 20)
-                                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                                    }
-                                },
-                                placeholder: {
-                                    Color.white.opacity(0.2)
-                                        .frame(width: 20, height: 20)
-                                }
-                            )
-                        }
-
-                        Text(label.text.uppercased())
-                            .font(.system(size: 11, weight: .bold))
-                            .tracking(0.8)
-                            .foregroundColor(.white.opacity(0.85))
-
-                        if let subject = label.subject, !subject.isEmpty {
-                            Text(subject)
-                                .font(.system(size: 11, weight: .heavy))
-                                .foregroundColor(.white)
-                                .lineLimit(1)
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color.black.opacity(0.40))
-                    .clipShape(Capsule())
-
-                    // Main Title
-                    Text(card.title)
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                        .lineLimit(2)
-                        .shadow(color: Color.black.opacity(0.7), radius: 10, x: 0, y: 4)
-
-                    // Subtitle
-                    if !card.subtitle.isEmpty {
-                        Text(card.subtitle)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(.white.opacity(0.78))
-                            .lineLimit(1)
-                            .shadow(color: Color.black.opacity(0.6), radius: 6, x: 0, y: 2)
-                    }
-
-                    Spacer().frame(height: 6)
-
-                    // Pill Action Button
-                    Button(action: {
-                        handlePillClick()
-                    }) {
-                        HStack(spacing: 8) {
-                            Image(systemName: pillIcon)
-                                .font(.system(size: 14, weight: .bold))
-
-                            Text(pillText)
-                                .font(.system(size: 14, weight: .bold))
-                        }
-                        .foregroundColor(Color(red: 0.16, green: 0.16, blue: 0.16))
-                        .padding(.horizontal, 22)
-                        .padding(.vertical, 10)
-                        .background(
-                            Capsule()
-                                .fill(Color.white.opacity(0.92))
-                        )
-                        .shadow(color: Color.black.opacity(0.35), radius: 12, x: 0, y: 4)
-                        .scaleEffect(isPillHovered ? 1.05 : 1.0)
-                    }
-                    .buttonStyle(.plain)
-                    .onHover { isPillHovered = $0 }
-                }
-                .padding(.horizontal, 36)
-                .padding(.bottom, 32)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+
+            // Scrim Gradients for crisp typography
+            // Top scrim for seed badge
+            LinearGradient(
+                stops: [
+                    .init(color: Color.black.opacity(0.60), location: 0.0),
+                    .init(color: Color.clear, location: 0.35)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
             )
-            .shadow(color: Color.black.opacity(0.40), radius: 20, x: 0, y: 8)
-            .onHover { isHovered = $0 }
+
+            // Bottom heavy scrim for title, subtitle, and pill
+            LinearGradient(
+                stops: [
+                    .init(color: Color.clear, location: 0.22),
+                    .init(color: Color.black.opacity(0.48), location: 0.58),
+                    .init(color: Color.black.opacity(0.92), location: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            // Foreground Content
+            VStack(alignment: .leading, spacing: 8) {
+                Spacer()
+
+                // Seed Label Badge
+                let label = card.label(isPlaying: isPlaying)
+                HStack(spacing: 8) {
+                    if let seedCover = label.coverUrl, !seedCover.isEmpty {
+                        CachedAsyncImage(
+                            urlString: seedCover.ytResize(width: 80, height: 80),
+                            content: { img in
+                                if label.roundCover {
+                                    img.resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 20, height: 20)
+                                        .clipShape(Circle())
+                                } else {
+                                    img.resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 20, height: 20)
+                                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                                }
+                            },
+                            placeholder: {
+                                Color.white.opacity(0.2)
+                                    .frame(width: 20, height: 20)
+                            }
+                        )
+                    }
+
+                    Text(label.text.uppercased())
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(0.8)
+                        .foregroundColor(.white.opacity(0.85))
+
+                    if let subject = label.subject, !subject.isEmpty {
+                        Text(subject)
+                            .font(.system(size: 11, weight: .heavy))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color.black.opacity(0.40))
+                .clipShape(Capsule())
+
+                // Main Title
+                Text(card.title)
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+                    .shadow(color: Color.black.opacity(0.7), radius: 10, x: 0, y: 4)
+
+                // Subtitle
+                if !card.subtitle.isEmpty {
+                    Text(card.subtitle)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white.opacity(0.78))
+                        .lineLimit(1)
+                        .shadow(color: Color.black.opacity(0.6), radius: 6, x: 0, y: 2)
+                }
+
+                Spacer().frame(height: 6)
+
+                // Pill Action Button
+                Button(action: {
+                    handlePillClick()
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: pillIcon)
+                            .font(.system(size: 13, weight: .bold))
+
+                        Text(pillText)
+                            .font(.system(size: 13, weight: .bold))
+                    }
+                    .foregroundColor(Color(red: 0.16, green: 0.16, blue: 0.16))
+                    .padding(.horizontal, 22)
+                    .padding(.vertical, 10)
+                    .background(
+                        Capsule()
+                            .fill(Color.white.opacity(0.94))
+                    )
+                    .shadow(color: Color.black.opacity(0.35), radius: 10, x: 0, y: 4)
+                    .scaleEffect(isPillHovered ? 1.05 : 1.0)
+                }
+                .buttonStyle(.plain)
+                .onHover { isPillHovered = $0 }
+            }
+            .padding(.horizontal, 32)
+            .padding(.bottom, 26)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.40), radius: 20, x: 0, y: 8)
+        .onHover { isHovered = $0 }
     }
 
     private var pillIcon: String {
@@ -784,8 +771,7 @@ public struct HeroCarouselView: View {
     public let onTogglePauseResume: () -> Void
     public let onNavigateCollection: (SongItem) -> Void
 
-    @State private var currentIndex: Int = 0
-    @State private var dragOffset: CGFloat = 0
+    @State private var activeCardId: String?
     @State private var isCarouselHovered: Bool = false
     @State private var isGachaRolling: Bool = false
     @State private var autoAdvanceTimer: Timer?
@@ -808,6 +794,11 @@ public struct HeroCarouselView: View {
         self.onNavigateCollection = onNavigateCollection
     }
 
+    private var currentIndex: Int {
+        guard let activeCardId else { return 0 }
+        return cards.firstIndex(where: { $0.id == activeCardId }) ?? 0
+    }
+
     public var body: some View {
         guard !cards.isEmpty else { return AnyView(EmptyView()) }
 
@@ -816,160 +807,176 @@ public struct HeroCarouselView: View {
                 let totalW = proxy.size.width
                 // Card width: ~80% of screen width, bounded nicely on desktop
                 let cardW = min(max(totalW * 0.80, 520), 960)
-                let cardH: CGFloat = 360
-                let cardSpacing: CGFloat = 18.0
-                let sideInset = (totalW - cardW) / 2.0
+                let cardH: CGFloat = 370
+                let cardSpacing: CGFloat = 16.0
+                let sideInset = max(0, (totalW - cardW) / 2.0)
+                let containerH: CGFloat = 418
 
-                ZStack {
-                    // Paging Cards Stack
-                    HStack(spacing: cardSpacing) {
-                        ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
-                            Group {
-                                if card.kind == .gacha {
-                                    GachaCardView(
-                                        candidates: gachaCandidates,
-                                        isCurrentlyPlayingResult: isAudioPlaying && currentPlayingTrackId == card.songItem?.id,
-                                        onPlayWonTrack: { wonSong, pool in
-                                            onPlaySong(wonSong, pool)
-                                        },
-                                        onRollingStateChanged: { rolling in
-                                            self.isGachaRolling = rolling
-                                        }
-                                    )
-                                } else {
-                                    let isThisCardPlaying = isAudioPlaying && (card.songItem?.id == currentPlayingTrackId)
-                                    HeroCardView(
-                                        card: card,
-                                        isPlaying: isThisCardPlaying,
-                                        onPlay: { song in
-                                            if card.songItem?.id == currentPlayingTrackId {
-                                                onTogglePauseResume()
+                ScrollViewReader { scrollProxy in
+                    ZStack(alignment: .top) {
+                        VStack(spacing: 12) {
+                            // Native macOS Horizontal ScrollView with ViewAligned snapping
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: cardSpacing) {
+                                    ForEach(cards) { card in
+                                        Group {
+                                            if card.kind == .gacha {
+                                                GachaCardView(
+                                                    candidates: gachaCandidates,
+                                                    isCurrentlyPlayingResult: isAudioPlaying && currentPlayingTrackId == card.songItem?.id,
+                                                    onPlayWonTrack: { wonSong, pool in
+                                                        onPlaySong(wonSong, pool)
+                                                    },
+                                                    onRollingStateChanged: { rolling in
+                                                        self.isGachaRolling = rolling
+                                                    }
+                                                )
                                             } else {
-                                                onPlaySong(song, [song])
+                                                let isThisCardPlaying = isAudioPlaying && (card.songItem?.id == currentPlayingTrackId)
+                                                HeroCardView(
+                                                    card: card,
+                                                    isPlaying: isThisCardPlaying,
+                                                    onPlay: { song in
+                                                        if card.songItem?.id == currentPlayingTrackId {
+                                                            onTogglePauseResume()
+                                                        } else {
+                                                            onPlaySong(song, [song])
+                                                        }
+                                                    },
+                                                    onNavigate: { song in
+                                                        onNavigateCollection(song)
+                                                    }
+                                                )
                                             }
-                                        },
-                                        onNavigate: { song in
-                                            onNavigateCollection(song)
                                         }
-                                    )
-                                }
-                            }
-                            .frame(width: cardW, height: cardH)
-                            .scaleEffect(index == currentIndex ? 1.0 : 0.96)
-                            .opacity(index == currentIndex ? 1.0 : 0.72)
-                            .animation(.spring(response: 0.45, dampingFraction: 0.82), value: currentIndex)
-                        }
-                    }
-                    .offset(x: sideInset - CGFloat(currentIndex) * (cardW + cardSpacing) + dragOffset)
-                    .gesture(
-                        DragGesture()
-                            .onChanged { value in
-                                dragOffset = value.translation.width
-                            }
-                            .onEnded { value in
-                                let threshold: CGFloat = 50.0
-                                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                                    if value.translation.width < -threshold && currentIndex < cards.count - 1 {
-                                        currentIndex += 1
-                                    } else if value.translation.width > threshold && currentIndex > 0 {
-                                        currentIndex -= 1
+                                        .frame(width: cardW, height: cardH)
+                                        .id(card.id)
                                     }
-                                    dragOffset = 0
                                 }
+                                .scrollTargetLayout()
                             }
-                    )
-
-                    // Desktop Navigation Chevrons
-                    if isCarouselHovered && cards.count > 1 {
-                        HStack {
-                            if currentIndex > 0 {
-                                Button(action: {
-                                    withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                                        currentIndex -= 1
-                                    }
-                                }) {
-                                    Image(systemName: "chevron.left")
-                                        .font(.system(size: 16, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .frame(width: 40, height: 40)
-                                        .background(.ultraThinMaterial)
-                                        .clipShape(Circle())
-                                        .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
-                                        .shadow(color: Color.black.opacity(0.4), radius: 8, x: 0, y: 4)
-                                }
-                                .buttonStyle(.plain)
-                                .padding(.leading, 18)
-                            }
-
-                            Spacer()
-
-                            if currentIndex < cards.count - 1 {
-                                Button(action: {
-                                    withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                                        currentIndex += 1
-                                    }
-                                }) {
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 16, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .frame(width: 40, height: 40)
-                                        .background(.ultraThinMaterial)
-                                        .clipShape(Circle())
-                                        .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
-                                        .shadow(color: Color.black.opacity(0.4), radius: 8, x: 0, y: 4)
-                                }
-                                .buttonStyle(.plain)
-                                .padding(.trailing, 18)
-                            }
-                        }
-                        .transition(.opacity)
-                    }
-
-                    // Bottom Capsule Page Indicators
-                    VStack {
-                        Spacer()
-                        HStack(spacing: 6) {
-                            ForEach(0..<cards.count, id: \.self) { idx in
-                                Capsule()
-                                    .fill(idx == currentIndex ? Color.white : Color.white.opacity(0.35))
-                                    .frame(width: idx == currentIndex ? 24 : 6, height: 6)
-                                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: currentIndex)
-                                    .onTapGesture {
-                                        withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                                            currentIndex = idx
+                            .scrollTargetBehavior(.viewAligned)
+                            .safeAreaPadding(.horizontal, sideInset)
+                            .scrollPosition(id: $activeCardId)
+                            .simultaneousGesture(
+                                DragGesture(minimumDistance: 25)
+                                    .onEnded { value in
+                                        if value.translation.width < -40 {
+                                            advanceNext(proxy: scrollProxy)
+                                        } else if value.translation.width > 40 {
+                                            advancePrev(proxy: scrollProxy)
                                         }
                                     }
+                            )
+
+                            // Bottom Capsule Page Indicators
+                            HStack(spacing: 6) {
+                                ForEach(0..<cards.count, id: \.self) { idx in
+                                    Capsule()
+                                        .fill(idx == currentIndex ? Color.white : Color.white.opacity(0.35))
+                                        .frame(width: idx == currentIndex ? 24 : 6, height: 6)
+                                        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: currentIndex)
+                                        .onTapGesture {
+                                            let targetId = cards[idx].id
+                                            withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+                                                activeCardId = targetId
+                                                scrollProxy.scrollTo(targetId, anchor: .center)
+                                            }
+                                        }
+                                }
                             }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.black.opacity(0.35))
+                            .clipShape(Capsule())
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.black.opacity(0.35))
-                        .clipShape(Capsule())
-                        .padding(.bottom, -18)
+
+                        // Desktop Navigation Chevrons
+                        if isCarouselHovered && cards.count > 1 {
+                            HStack {
+                                if currentIndex > 0 {
+                                    Button(action: {
+                                        advancePrev(proxy: scrollProxy)
+                                    }) {
+                                        Image(systemName: "chevron.left")
+                                            .font(.system(size: 16, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .frame(width: 40, height: 40)
+                                            .background(.ultraThinMaterial)
+                                            .clipShape(Circle())
+                                            .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
+                                            .shadow(color: Color.black.opacity(0.4), radius: 8, x: 0, y: 4)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(.leading, max(14, sideInset - 22))
+                                }
+
+                                Spacer()
+
+                                if currentIndex < cards.count - 1 {
+                                    Button(action: {
+                                        advanceNext(proxy: scrollProxy)
+                                    }) {
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 16, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .frame(width: 40, height: 40)
+                                            .background(.ultraThinMaterial)
+                                            .clipShape(Circle())
+                                            .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
+                                            .shadow(color: Color.black.opacity(0.4), radius: 8, x: 0, y: 4)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(.trailing, max(14, sideInset - 22))
+                                }
+                            }
+                            .frame(height: cardH)
+                            .transition(.opacity)
+                        }
                     }
-                }
-                .frame(width: totalW, height: cardH)
-                .onHover { hovering in
-                    isCarouselHovered = hovering
-                }
-                .onAppear {
-                    startAutoAdvance()
-                }
-                .onDisappear {
-                    stopAutoAdvance()
+                    .frame(width: totalW, height: containerH)
+                    .onHover { hovering in
+                        isCarouselHovered = hovering
+                    }
+                    .onAppear {
+                        if activeCardId == nil {
+                            activeCardId = cards.first?.id
+                        }
+                        startAutoAdvance(proxy: scrollProxy)
+                    }
+                    .onDisappear {
+                        stopAutoAdvance()
+                    }
                 }
             }
-            .frame(height: 388)
+            .frame(height: 418)
         )
     }
 
-    private func startAutoAdvance() {
+    private func advanceNext(proxy: ScrollViewProxy) {
+        guard !cards.isEmpty else { return }
+        let nextIdx = (currentIndex + 1) % cards.count
+        let nextId = cards[nextIdx].id
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+            activeCardId = nextId
+            proxy.scrollTo(nextId, anchor: .center)
+        }
+    }
+
+    private func advancePrev(proxy: ScrollViewProxy) {
+        guard currentIndex > 0 else { return }
+        let prevId = cards[currentIndex - 1].id
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+            activeCardId = prevId
+            proxy.scrollTo(prevId, anchor: .center)
+        }
+    }
+
+    private func startAutoAdvance(proxy: ScrollViewProxy) {
         stopAutoAdvance()
         autoAdvanceTimer = Timer.scheduledTimer(withTimeInterval: 5.5, repeats: true) { _ in
             guard !isCarouselHovered, !isGachaRolling, cards.count > 1 else { return }
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
-                currentIndex = (currentIndex + 1) % cards.count
-            }
+            advanceNext(proxy: proxy)
         }
     }
 
