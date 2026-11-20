@@ -151,7 +151,7 @@ public final class UpdateService: ObservableObject {
     private var downloadTask: Task<Void, Never>? = nil
 
     public var currentVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "8.4.1-beta.1"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "8.4.1-beta.2"
     }
 
     public var currentBuild: String {
