@@ -8,6 +8,8 @@ public struct HomeScreen: View {
     @ObservedObject private var player = AudioPlayerService.shared
     @State private var sections: [HomeSection] = []
     @State private var isLoading: Bool = true
+    @State private var heroCards: [HeroCardModel] = []
+    @State private var gachaCandidates: [SongItem] = []
 
     public init(
         onPlay: @escaping (SongItem, [SongItem]) -> Void,
@@ -34,7 +36,7 @@ public struct HomeScreen: View {
                                     .tracking(-0.8)
                                     .foregroundStyle(
                                         LinearGradient(
-                                            colors: [.white, Color.white.opacity(0.72)],
+                                             colors: [.white, Color.white.opacity(0.72)],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
                                         )
@@ -44,25 +46,6 @@ public struct HomeScreen: View {
                         }
 
                         // Top Hero Carousel with Gacha Card
-                        let avoidSongIds = library.avoidSongIds()
-                        let avoidArtists = library.avoidArtists()
-                        let heroCards = buildHeroCards(
-                            history: library.history,
-                            liked: library.likedSongs,
-                            sections: sections,
-                            currentTrack: player.currentTrack,
-                            isPlaying: player.isPlaying,
-                            avoidSongIds: avoidSongIds,
-                            avoidArtists: avoidArtists
-                        )
-                        let gachaCandidates = buildGachaCandidates(
-                            history: library.history,
-                            liked: library.likedSongs,
-                            sections: sections,
-                            avoidSongIds: avoidSongIds,
-                            avoidArtists: avoidArtists
-                        )
-
                         if !heroCards.isEmpty {
                             HeroCarouselView(
                                 cards: heroCards,
@@ -122,6 +105,21 @@ public struct HomeScreen: View {
                 }
             }
         }
+        .onAppear {
+            refreshHeroCards()
+        }
+        .onChange(of: player.currentTrack?.id) { _, _ in
+            refreshHeroCards()
+        }
+        .onChange(of: player.isPlaying) { _, _ in
+            refreshHeroCards()
+        }
+        .onChange(of: library.history.count) { _, _ in
+            refreshHeroCards()
+        }
+        .onChange(of: library.likedSongs.count) { _, _ in
+            refreshHeroCards()
+        }
         .task {
             let res = await InnerTubeService.shared.fetchHome(
                 history: LibraryStore.shared.history,
@@ -131,7 +129,29 @@ public struct HomeScreen: View {
             )
             self.sections = res
             self.isLoading = false
+            self.refreshHeroCards()
         }
+    }
+
+    private func refreshHeroCards() {
+        let avoidSongIds = library.avoidSongIds()
+        let avoidArtists = library.avoidArtists()
+        self.heroCards = buildHeroCards(
+            history: library.history,
+            liked: library.likedSongs,
+            sections: sections,
+            currentTrack: player.currentTrack,
+            isPlaying: player.isPlaying,
+            avoidSongIds: avoidSongIds,
+            avoidArtists: avoidArtists
+        )
+        self.gachaCandidates = buildGachaCandidates(
+            history: library.history,
+            liked: library.likedSongs,
+            sections: sections,
+            avoidSongIds: avoidSongIds,
+            avoidArtists: avoidArtists
+        )
     }
 }
 

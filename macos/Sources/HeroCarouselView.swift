@@ -829,7 +829,7 @@ public struct HeroCarouselView: View {
     @State private var activePageIndex: Int?
     @State private var isCarouselHovered: Bool = false
 
-    private let loopMultiplier = 400
+    private let loopMultiplier = 20
 
     public init(
         cards: [HeroCardModel],
@@ -848,7 +848,7 @@ public struct HeroCarouselView: View {
         self.onTogglePauseResume = onTogglePauseResume
         self.onNavigateCollection = onNavigateCollection
 
-        let initPage = cards.count > 1 ? (400 / 2) * cards.count : 0
+        let initPage = cards.count > 1 ? (20 / 2) * cards.count : 0
         self._activePageIndex = State(initialValue: initPage)
     }
 
@@ -1002,8 +1002,8 @@ public struct HeroCarouselView: View {
                     .onChange(of: activePageIndex) { _, newPage in
                         guard let newPage, cards.count > 1 else { return }
                         let count = cards.count
-                        let minBound = 50 * count
-                        let maxBound = (loopMultiplier - 50) * count
+                        let minBound = 3 * count
+                        let maxBound = (loopMultiplier - 3) * count
                         if newPage < minBound || newPage > maxBound {
                             let cardIdx = ((newPage % count) + count) % count
                             let centerBase = (loopMultiplier / 2) * count

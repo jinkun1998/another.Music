@@ -469,7 +469,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
     }
 
     private func attachObservers(to newPlayer: AVPlayer, item: AVPlayerItem) {
-        let interval = CMTime(seconds: 0.1, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
+        let interval = CMTime(seconds: 0.25, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
         let itemId = ObjectIdentifier(item)
         timeObserverToken = newPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             Task { @MainActor [weak self] in
@@ -534,7 +534,6 @@ public final class AudioPlayerService: NSObject, ObservableObject {
                             self.progress = min(max(current / dur, 0.0), 1.0)
                         }
                     }
-                    self.updateNowPlaying()
                 }
             }
         }

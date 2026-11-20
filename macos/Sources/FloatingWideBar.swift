@@ -6,7 +6,6 @@ import SwiftUI
     var incomingTrack: SongItem? = nil
     var transitionProgress: Double = 0.0
     let isPlaying: Bool
-    let progress: Double
     let onTogglePlay: () -> Void
     let onNext: () -> Void
     let onPrevious: () -> Void
@@ -156,32 +155,45 @@ import SwiftUI
         .animation(.spring(response: 0.35, dampingFraction: 0.82), value: currentTrack?.id)
         .overlay(alignment: .bottom) {
             if currentTrack != nil {
-                GeometryReader { geo in
-                    let fillRatio = transitionProgress > 0 ? ((1.0 - transitionProgress) * progress) : progress
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(isBarHovered ? 0.95 : 0.75),
-                                    Color.white.opacity(isBarHovered ? 0.65 : 0.45)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: max(geo.size.width * CGFloat(fillRatio), 0), height: isBarHovered ? 3.5 : 2)
-                        .shadow(color: Color.white.opacity(isBarHovered ? 0.4 : 0.0), radius: 3)
-                }
-                .frame(height: isBarHovered ? 3.5 : 2)
-                .clipShape(Capsule())
-                .padding(.horizontal, 18)
-                .padding(.bottom, 2)
-                .transition(.opacity)
-                .animation(.spring(response: 0.24, dampingFraction: 0.8), value: isBarHovered)
+                MiniPlayerProgressBar(isBarHovered: isBarHovered)
+                    .frame(height: isBarHovered ? 3.5 : 2)
+                    .clipShape(Capsule())
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 2)
+                    .transition(.opacity)
+                    .animation(.spring(response: 0.24, dampingFraction: 0.8), value: isBarHovered)
             }
         }
         .onHover { isBarHovered = $0 }
     }
 
     @Namespace private var navNamespace
+}
+
+/// Isolated progress bar component so progress ticks only redraw this tiny capsule,
+/// without re-rendering FloatingWideBar or the main app view hierarchy.
+private struct MiniPlayerProgressBar: View {
+    @ObservedObject private var player = AudioPlayerService.shared
+    let isBarHovered: Bool
+
+    var body: some View {
+        GeometryReader { geo in
+            let fillRatio = player.isTransitioning
+                ? ((1.0 - player.uiTransitionProgress) * player.progress)
+                : player.progress
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(isBarHovered ? 0.95 : 0.75),
+                            Color.white.opacity(isBarHovered ? 0.65 : 0.45)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: max(geo.size.width * CGFloat(fillRatio), 0), height: isBarHovered ? 3.5 : 2)
+                .shadow(color: Color.white.opacity(isBarHovered ? 0.4 : 0.0), radius: 3)
+        }
+    }
 }
