@@ -57,7 +57,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
     @State private var showingClearAlert: Bool = false
 
     private var appVersionDisplay: String {
-        let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "8.4.1-beta.2"
+        let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "8.4.1-beta.3"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "75"
         return "Version \(ver) (build #\(build))"
     }
