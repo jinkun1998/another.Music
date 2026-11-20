@@ -283,4 +283,79 @@ final class AnotherMusicTests: XCTestCase {
         XCTAssertFalse(songs.isEmpty, "Filtered song search should return items")
         XCTAssertEqual(songs.first?.kind, .song)
     }
+
+    func testYouTubeThumbnailResizing() {
+        let ytUrl = "https://i.ytimg.com/vi/abc12345/mqdefault.jpg"
+        XCTAssertEqual(ytUrl.ytResize(width: 1200, height: 1200), "https://i.ytimg.com/vi/abc12345/maxresdefault.jpg")
+        XCTAssertEqual(ytUrl.ytResize(width: 500, height: 500), "https://i.ytimg.com/vi/abc12345/hqdefault.jpg")
+
+        let googleContent = "https://lh3.googleusercontent.com/xyz=w226-h226-l90-rj"
+        XCTAssertEqual(googleContent.ytResize(width: 1200, height: 1200), "https://lh3.googleusercontent.com/xyz=w1200-h1200-p-l90-rj")
+
+        let ggpht = "https://yt3.ggpht.com/avatar=s120-c-k-c0x00ffffff-no-rj"
+        XCTAssertEqual(ggpht.ytResize(width: 80, height: 80), "https://yt3.ggpht.com/avatar=s80")
+    }
+
+    func testHeroCarouselCardAssemblyAndGachaPlacement() {
+        let history = [
+            SongItem(id: "h1", title: "Song 1", artist: "Artist 1", thumbnail: "https://i.ytimg.com/vi/h1/default.jpg", kind: .song),
+            SongItem(id: "h2", title: "Song 2", artist: "Artist 2", thumbnail: "https://i.ytimg.com/vi/h2/default.jpg", kind: .song)
+        ]
+        let liked = [
+            SongItem(id: "l1", title: "Liked 1", artist: "Liked Artist 1", thumbnail: "https://i.ytimg.com/vi/l1/default.jpg", kind: .song)
+        ]
+        let shelfItems = [
+            SongItem(id: "s1", title: "Rec 1", artist: "Rec Artist 1", thumbnail: "https://i.ytimg.com/vi/s1/default.jpg", kind: .song),
+            SongItem(id: "a1", title: "Album 1", artist: "Album Artist 1", thumbnail: "https://i.ytimg.com/vi/a1/default.jpg", kind: .album)
+        ]
+        let sections = [
+            HomeSection(id: "sec1", title: "Quick picks", label: "Because you like", items: shelfItems)
+        ]
+
+        // 1. When no current playing track, Card 0 is Continue from history
+        let cards = buildHeroCards(
+            history: history,
+            liked: liked,
+            sections: sections,
+            currentTrack: nil,
+            isPlaying: false
+        )
+
+        XCTAssertFalse(cards.isEmpty)
+        XCTAssertEqual(cards.first?.id, "continue_h1")
+        XCTAssertEqual(cards.first?.initialLabel.text, "Continue")
+
+        // 2. Card 1 must be the Gacha Card ("hero_gacha_card")
+        XCTAssertGreaterThan(cards.count, 1)
+        XCTAssertEqual(cards[1].id, "hero_gacha_card")
+        XCTAssertEqual(cards[1].kind, .gacha)
+        XCTAssertEqual(cards[1].title, "Random plays")
+
+        // 3. When song is actively playing, label shifts to "Now playing"
+        let current = SongItem(id: "now1", title: "Playing Now", artist: "Live Artist", thumbnail: "https://i.ytimg.com/vi/now1/default.jpg", kind: .song)
+        let playingCards = buildHeroCards(
+            history: history,
+            liked: liked,
+            sections: sections,
+            currentTrack: current,
+            isPlaying: true
+        )
+        XCTAssertEqual(playingCards.first?.id, "now_playing_now1")
+        XCTAssertEqual(playingCards.first?.label(isPlaying: true).text, "Now playing")
+
+        // 4. Test Gacha candidate pool
+        let candidates = buildGachaCandidates(history: history, liked: liked, sections: sections)
+        XCTAssertGreaterThanOrEqual(candidates.count, 2)
+        XCTAssertLessThanOrEqual(candidates.count, 10)
+        let ids = candidates.map(\.id)
+        XCTAssertEqual(Set(ids).count, ids.count, "Gacha candidates must be deduplicated")
+    }
+
+    func testGachaSoundsInitialization() {
+        let sounds = GachaSounds.shared
+        sounds.prepare()
+        // Ensure calling tick and win does not crash even without physical audio output
+        sounds.tick()
+        sounds.win()
+    }
 }

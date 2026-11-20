@@ -2,10 +2,20 @@ import SwiftUI
 
 public struct HomeScreen: View {
     let onPlay: (SongItem, [SongItem]) -> Void
+    var onNavigate: ((SongItem) -> Void)? = nil
 
     @ObservedObject private var library = LibraryStore.shared
+    @ObservedObject private var player = AudioPlayerService.shared
     @State private var sections: [HomeSection] = []
     @State private var isLoading: Bool = true
+
+    public init(
+        onPlay: @escaping (SongItem, [SongItem]) -> Void,
+        onNavigate: ((SongItem) -> Void)? = nil
+    ) {
+        self.onPlay = onPlay
+        self.onNavigate = onNavigate
+    }
 
     public var body: some View {
         ZStack {
@@ -31,6 +41,42 @@ public struct HomeScreen: View {
                                     )
                             }
                             .padding(.horizontal, 36)
+                        }
+
+                        // Top Hero Carousel with Gacha Card
+                        let heroCards = buildHeroCards(
+                            history: library.history,
+                            liked: library.likedSongs,
+                            sections: sections,
+                            currentTrack: player.currentTrack,
+                            isPlaying: player.isPlaying
+                        )
+                        let gachaCandidates = buildGachaCandidates(
+                            history: library.history,
+                            liked: library.likedSongs,
+                            sections: sections
+                        )
+
+                        if !heroCards.isEmpty {
+                            HeroCarouselView(
+                                cards: heroCards,
+                                gachaCandidates: gachaCandidates,
+                                currentPlayingTrackId: player.currentTrack?.id,
+                                isAudioPlaying: player.isPlaying,
+                                onPlaySong: { song, queue in
+                                    onPlay(song, queue)
+                                },
+                                onTogglePauseResume: {
+                                    if player.isPlaying {
+                                        player.pause()
+                                    } else {
+                                        player.resume()
+                                    }
+                                },
+                                onNavigateCollection: { song in
+                                    onNavigate?(song)
+                                }
+                            )
                         }
 
                         ForEach(sections) { sec in

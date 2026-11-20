@@ -129,9 +129,14 @@ extension Notification.Name { static let gotoSearch = Notification.Name("gotoSea
                 ZStack {
                     switch selectedTab {
                     case "Home":
-                        HomeScreen(onPlay: { song, queue in
-                            handle(song, queue)
-                        })
+                        HomeScreen(
+                            onPlay: { song, queue in
+                                handle(song, queue)
+                            },
+                            onNavigate: { item in
+                                handle(item, [])
+                            }
+                        )
                     case "Search":
                         SearchScreen(
                             onPlay: { song, queue in
