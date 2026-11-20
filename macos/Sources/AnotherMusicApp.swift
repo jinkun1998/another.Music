@@ -5,6 +5,7 @@ import AppKit
 @MainActor struct AnotherMusicApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var player = AudioPlayerService.shared
+    @ObservedObject private var updater = UpdateService.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
 
     var body: some Scene {
@@ -22,6 +23,20 @@ import AppKit
                     .transition(.opacity.combined(with: .scale(scale: 1.03)))
                     .zIndex(100)
                 }
+
+                if updater.showUpdateSheet, let release = updater.latestRelease {
+                    Color.black.opacity(0.55)
+                        .ignoresSafeArea()
+                        .onTapGesture { updater.dismiss() }
+                        .zIndex(200)
+
+                    UpdateSheetView(release: release)
+                        .transition(.asymmetric(
+                            insertion: .scale(scale: 0.92).combined(with: .opacity),
+                            removal: .scale(scale: 0.92).combined(with: .opacity)
+                        ))
+                        .zIndex(201)
+                }
             }
             .preferredColorScheme(.dark)
             .frame(minWidth: 1040, minHeight: 720)
@@ -30,9 +45,22 @@ import AppKit
                     AppDelegate.shared.configureMainWindow(window)
                 }
             )
+            .task {
+                if updater.autoCheckEnabled {
+                    await updater.checkForUpdates(silent: true)
+                }
+            }
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates...") {
+                    Task {
+                        await updater.checkForUpdates(silent: false)
+                    }
+                }
+            }
+
             CommandGroup(replacing: .newItem) {
                 Button("New Window") {
                     AppDelegate.shared.reopenMainWindow()

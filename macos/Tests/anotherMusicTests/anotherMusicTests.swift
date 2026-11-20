@@ -372,4 +372,42 @@ final class AnotherMusicTests: XCTestCase {
         XCTAssertEqual(style.response, 0.28)
         XCTAssertEqual(style.dampingFraction, 0.62)
     }
+
+    func testSemVerComparison() {
+        // Basic versions
+        XCTAssertTrue(SemVer("8.4.1") < SemVer("8.4.2"))
+        XCTAssertTrue(SemVer("8.4.1") < SemVer("9.0.0"))
+        XCTAssertFalse(SemVer("8.4.2") < SemVer("8.4.1"))
+        XCTAssertEqual(SemVer("8.4.1"), SemVer("v8.4.1"))
+
+        // Prerelease comparison: stable release is newer than beta
+        XCTAssertTrue(SemVer("8.4.1-beta.1") < SemVer("8.4.1"))
+        XCTAssertTrue(SemVer("8.4.1-beta.1") < SemVer("v8.4.1"))
+        XCTAssertTrue(SemVer("8.4.1-beta.1") < SemVer("8.4.1-beta.2"))
+        XCTAssertTrue(SemVer("8.4.1-beta.1") < SemVer("8.4.2"))
+        XCTAssertFalse(SemVer("8.4.1-beta.1") < SemVer("8.4.0"))
+        XCTAssertFalse(SemVer("8.4.1-beta.1") < SemVer("8.4.1-beta.1"))
+    }
+
+    func testAppReleaseAssetSelection() {
+        let assets = [
+            GitHubReleaseAsset(id: 1, name: "mochy-8.4.2.apk", browserDownloadUrl: "https://example.com/mochy.apk", size: 12345, contentType: "application/vnd.android.package-archive"),
+            GitHubReleaseAsset(id: 2, name: "anotherMusic-8.4.2-macos.dmg", browserDownloadUrl: "https://example.com/anotherMusic.dmg", size: 67890, contentType: "application/x-apple-diskimage")
+        ]
+        let release = AppRelease(
+            id: 100,
+            tagName: "v8.4.2",
+            version: "8.4.2",
+            name: "anotherMusic 8.4.2",
+            body: "Changelog details",
+            htmlUrl: "https://github.com/jinkun1998/another.Music/releases/tag/v8.4.2",
+            publishedAt: nil,
+            isPrerelease: false,
+            assets: assets
+        )
+
+        XCTAssertNotNil(release.dmgAsset)
+        XCTAssertEqual(release.dmgAsset?.name, "anotherMusic-8.4.2-macos.dmg")
+        XCTAssertEqual(release.dmgAsset?.browserDownloadUrl, "https://example.com/anotherMusic.dmg")
+    }
 }

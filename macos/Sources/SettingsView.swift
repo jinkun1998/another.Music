@@ -52,6 +52,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
 
     @ObservedObject private var player = AudioPlayerService.shared
     @ObservedObject private var library = LibraryStore.shared
+    @ObservedObject private var updater = UpdateService.shared
 
     @State private var showingClearAlert: Bool = false
 
@@ -432,6 +433,63 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             }
 
             SettingsGroupCard {
+                VStack(spacing: 12) {
+                    SettingsRow(
+                        icon: "arrow.triangle.2.circlepath",
+                        title: "Software Update",
+                        subtitle: updateSubtitle
+                    ) {
+                        HStack(spacing: 8) {
+                            switch updater.status {
+                            case .checking:
+                                ProgressView()
+                                    .scaleEffect(0.7)
+                                    .frame(width: 18, height: 18)
+
+                            case .available:
+                                Button("Update Available") {
+                                    updater.showUpdateSheet = true
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(Color(red: 0.98, green: 0.28, blue: 0.42))
+
+                            case .downloading:
+                                ProgressView()
+                                    .scaleEffect(0.7)
+                                    .frame(width: 18, height: 18)
+
+                            case let .readyToInstall(dmgUrl):
+                                Button("Install Update") {
+                                    NSWorkspace.shared.open(dmgUrl)
+                                }
+                                .buttonStyle(.borderedProminent)
+
+                            default:
+                                Button("Check for Updates") {
+                                    Task { await updater.checkForUpdates(silent: false) }
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                        }
+                    }
+
+                    Divider().overlay(Color.white.opacity(0.08))
+
+                    SettingsRow(
+                        icon: "sparkle",
+                        title: "Automatic Updates",
+                        subtitle: "Check for new releases automatically in the background"
+                    ) {
+                        Toggle("", isOn: Binding(
+                            get: { updater.autoCheckEnabled },
+                            set: { updater.autoCheckEnabled = $0 }
+                        ))
+                        .toggleStyle(.switch)
+                    }
+                }
+            }
+
+            SettingsGroupCard {
                 SettingsRow(icon: "sparkles", title: "Setup Wizard", subtitle: "Replay introductory onboarding experience") {
                     Button("Replay Onboarding") {
                         hasCompletedOnboarding = false
@@ -439,6 +497,29 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                     .buttonStyle(.bordered)
                 }
             }
+        }
+    }
+
+    private var updateSubtitle: String {
+        switch updater.status {
+        case .checking:
+            return "Checking GitHub releases..."
+        case let .upToDate(ver):
+            if let last = updater.lastCheckedDate {
+                let timeStr = DateFormatter.localizedString(from: last, dateStyle: .none, timeStyle: .short)
+                return "Up to date (\(ver)) • Checked at \(timeStr)"
+            }
+            return "anotherMusic is up to date (\(ver))"
+        case let .available(release):
+            return "Version \(release.tagName) is available to install"
+        case let .downloading(prog, _, _):
+            return "Downloading update... \(Int(prog * 100))%"
+        case .readyToInstall:
+            return "Update downloaded and disk image mounted"
+        case let .failed(err):
+            return "Check failed: \(err)"
+        case .idle:
+            return "GitHub Releases auto-updater"
         }
     }
 
