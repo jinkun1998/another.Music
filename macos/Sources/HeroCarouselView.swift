@@ -304,7 +304,7 @@ public struct GachaCardView: View {
                     )
                     .scaleEffect(isHovered && !state.isRolling ? 1.04 : 1.0)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(AppleMusicPressButtonStyle(pressedScale: 0.92))
                 .disabled(state.isRolling || effectiveCandidates.isEmpty)
             }
             .padding(.horizontal, 32)
@@ -750,6 +750,7 @@ public struct HeroCardView: View {
                         HStack(spacing: 8) {
                             Image(systemName: pillIcon)
                                 .font(.system(size: 13, weight: .bold))
+                                .contentTransition(.symbolEffect(.replace.downUp.byLayer))
 
                             Text(pillText)
                                 .font(.system(size: 14, weight: .bold))
@@ -759,11 +760,12 @@ public struct HeroCardView: View {
                         .frame(height: 34)
                         .background(
                             Capsule()
-                                .fill(Color.white.opacity(0.68))
+                                .fill(Color.white.opacity(isPillHovered ? 0.85 : 0.68))
+                                .shadow(color: Color.black.opacity(isPillHovered ? 0.3 : 0.15), radius: 6, y: 2)
                         )
                         .scaleEffect(isPillHovered ? 1.04 : 1.0)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(AppleMusicPressButtonStyle(pressedScale: 0.92))
                     .onHover { isPillHovered = $0 }
                 }
                 .padding(.horizontal, 32)

@@ -19,6 +19,8 @@ import SwiftUI
         ("Account", "person.crop.circle")
     ]
 
+    @State private var isBarHovered: Bool = false
+
     public var body: some View {
         HStack(spacing: 0) {
             // Left: Integrated Mini Player (animated expand/collapse)
@@ -82,32 +84,26 @@ import SwiftUI
 
                     // Transport controls
                     HStack(spacing: 4) {
-                        Image(systemName: "backward.fill")
-                            .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.85))
-                            .frame(width: 32, height: 32)
-                            .contentShape(Rectangle())
-                            .onTapGesture { onPrevious() }
+                        AppleMusicSkipButton(
+                            direction: .previous,
+                            iconSize: 13,
+                            plateSize: 32,
+                            onAction: onPrevious
+                        )
 
-                        ZStack {
-                            Circle()
-                                .fill(Color.white.opacity(0.14))
-                                .frame(width: 36, height: 36)
-                                .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 1))
+                        AppleMusicPlayPauseButton(
+                            isPlaying: isPlaying,
+                            size: 36,
+                            iconSize: 14,
+                            onToggle: onTogglePlay
+                        )
 
-                            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(.white)
-                        }
-                        .contentShape(Circle())
-                        .onTapGesture { onTogglePlay() }
-
-                        Image(systemName: "forward.fill")
-                            .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.85))
-                            .frame(width: 32, height: 32)
-                            .contentShape(Rectangle())
-                            .onTapGesture { onNext() }
+                        AppleMusicSkipButton(
+                            direction: .next,
+                            iconSize: 13,
+                            plateSize: 32,
+                            onAction: onNext
+                        )
                     }
 
                     // 1px divider
@@ -165,22 +161,25 @@ import SwiftUI
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(0.75),
-                                    Color.white.opacity(0.45)
+                                    Color.white.opacity(isBarHovered ? 0.95 : 0.75),
+                                    Color.white.opacity(isBarHovered ? 0.65 : 0.45)
                                 ],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
-                        .frame(width: max(geo.size.width * CGFloat(fillRatio), 0), height: 2)
+                        .frame(width: max(geo.size.width * CGFloat(fillRatio), 0), height: isBarHovered ? 3.5 : 2)
+                        .shadow(color: Color.white.opacity(isBarHovered ? 0.4 : 0.0), radius: 3)
                 }
-                .frame(height: 2)
+                .frame(height: isBarHovered ? 3.5 : 2)
                 .clipShape(Capsule())
                 .padding(.horizontal, 18)
                 .padding(.bottom, 2)
                 .transition(.opacity)
+                .animation(.spring(response: 0.24, dampingFraction: 0.8), value: isBarHovered)
             }
         }
+        .onHover { isBarHovered = $0 }
     }
 
     @Namespace private var navNamespace

@@ -239,125 +239,69 @@ import AppKit
                         .padding(.top, 4)
 
                         // Scrubber Slider
-                        VStack(spacing: 6) {
-                            GeometryReader { geo in
-                                let activeVal = isSeeking ? seekProgress : player.progress
-                                ZStack(alignment: .leading) {
-                                    Capsule()
-                                        .fill(Color.white.opacity(0.15))
-                                        .frame(height: 5)
-
-                                    Capsule()
-                                        .fill(.white)
-                                        .frame(width: max(geo.size.width * activeVal, 0), height: 5)
-
-                                    Circle()
-                                        .fill(Color.white)
-                                        .frame(width: 13, height: 13)
-                                        .shadow(radius: 4)
-                                        .offset(x: max(geo.size.width * activeVal - 6.5, 0))
-                                }
-                                .contentShape(Rectangle())
-                                .gesture(
-                                    DragGesture(minimumDistance: 0)
-                                        .onChanged { value in
-                                            isSeeking = true
-                                            seekProgress = min(max(value.location.x / geo.size.width, 0.0), 1.0)
-                                        }
-                                        .onEnded { value in
-                                            let finalVal = min(max(value.location.x / geo.size.width, 0.0), 1.0)
-                                            isSeeking = false
-                                            player.seek(to: finalVal)
-                                        }
-                                )
+                        AppleMusicScrubber(
+                            progress: isSeeking ? seekProgress : player.progress,
+                            positionSec: isSeeking ? (seekProgress * player.durationSec) : player.positionSec,
+                            durationSec: player.durationSec,
+                            isSeeking: isSeeking,
+                            onSeekStart: { ratio in
+                                isSeeking = true
+                                seekProgress = ratio
+                            },
+                            onSeekChange: { ratio in
+                                seekProgress = ratio
+                            },
+                            onSeekEnd: { ratio in
+                                isSeeking = false
+                                player.seek(to: ratio)
                             }
-                            .frame(height: 14)
-
-                            HStack {
-                                let curSec = isSeeking ? (seekProgress * player.durationSec) : player.positionSec
-                                Text(formatTime(curSec))
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.55))
-
-                                Spacer()
-
-                                Text(formatTime(player.durationSec))
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.55))
-                            }
-                        }
+                        )
                         .frame(width: deckW)
                         .onChange(of: player.positionSec) { _, _ in
                             if isSeeking { isSeeking = false }
                         }
 
                         // Transport Controls directly below Turntable
-                        HStack(spacing: 24) {
-                            Image(systemName: "shuffle")
-                                .font(.system(size: 16, weight: player.isShuffle ? .bold : .regular))
-                                .foregroundColor(player.isShuffle ? .white : .white.opacity(0.6))
-                                .frame(width: 36, height: 36)
-                                .contentShape(Rectangle())
-                                .onTapGesture { player.toggleShuffle() }
+                        HStack(spacing: 20) {
+                            AppleMusicTogglePillButton(
+                                iconName: "shuffle",
+                                isActive: player.isShuffle,
+                                onToggle: { player.toggleShuffle() }
+                            )
 
-                            Image(systemName: "backward.fill")
-                                .font(.system(size: 22))
-                                .foregroundColor(.white)
-                                .frame(width: 36, height: 36)
-                                .contentShape(Rectangle())
-                                .onTapGesture { player.previous() }
+                            AppleMusicSkipButton(
+                                direction: .previous,
+                                onAction: { player.previous() }
+                            )
 
-                            ZStack {
-                                Circle()
-                                    .fill(Color.white.opacity(0.14))
-                                    .frame(width: 56, height: 56)
+                            AppleMusicPlayPauseButton(
+                                isPlaying: player.isPlaying,
+                                size: 56,
+                                iconSize: 24,
+                                onToggle: { player.togglePlayPause() }
+                            )
 
-                                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                                    .font(.system(size: 24, weight: .bold))
-                                    .foregroundColor(.white)
-                            }
-                            .contentShape(Circle())
-                            .onTapGesture { player.togglePlayPause() }
+                            AppleMusicSkipButton(
+                                direction: .next,
+                                onAction: { player.next() }
+                            )
 
-                            Image(systemName: "forward.fill")
-                                .font(.system(size: 22))
-                                .foregroundColor(.white)
-                                .frame(width: 36, height: 36)
-                                .contentShape(Rectangle())
-                                .onTapGesture { player.next() }
-
-                            Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
-                                .font(.system(size: 16, weight: player.repeatMode != .off ? .bold : .regular))
-                                .foregroundColor(player.repeatMode != .off ? .white : .white.opacity(0.6))
-                                .frame(width: 36, height: 36)
-                                .contentShape(Rectangle())
-                                .onTapGesture { player.cycleRepeatMode() }
+                            AppleMusicTogglePillButton(
+                                iconName: player.repeatMode == .one ? "repeat.1" : "repeat",
+                                isActive: player.repeatMode != .off,
+                                onToggle: { player.cycleRepeatMode() }
+                            )
                         }
                         .frame(width: deckW)
 
                         // Volume Slider
-                        HStack(spacing: 10) {
-                            Image(systemName: "speaker.fill")
-                                .font(.system(size: 11))
-                                .foregroundColor(.white.opacity(0.4))
-                            // ponytail: pure SwiftUI slider; NSSlider-backed Slider crashed hit-testing
-                            GeometryReader { g in
-                                ZStack(alignment: .leading) {
-                                    Capsule().fill(Color.white.opacity(0.15)).frame(height: 4)
-                                    Capsule().fill(Color.white).frame(width: g.size.width * CGFloat(player.volume), height: 4)
-                                }
-                                .frame(maxHeight: .infinity)
-                                .contentShape(Rectangle())
-                                .gesture(DragGesture(minimumDistance: 0).onChanged { v in
-                                    player.setVolume(Float(min(max(v.location.x / g.size.width, 0), 1)))
-                                })
+                        AppleMusicVolumeControl(
+                            volume: player.volume,
+                            onVolumeChange: { newVol in
+                                player.setVolume(newVol)
                             }
-                            .frame(width: 140, height: 16)
-                            Image(systemName: "speaker.wave.3.fill")
-                                .font(.system(size: 11))
-                                .foregroundColor(.white.opacity(0.4))
-                        }
-                        .padding(.top, 2)
+                        )
+                        .padding(.top, 4)
 
                         Spacer(minLength: 0)
                     }

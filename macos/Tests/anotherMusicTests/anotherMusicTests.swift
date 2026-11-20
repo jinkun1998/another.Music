@@ -358,4 +358,18 @@ final class AnotherMusicTests: XCTestCase {
         sounds.tick()
         sounds.win()
     }
+
+    func testAppleMusicControlComponents() {
+        // Test Skip directions
+        XCTAssertEqual(AppleMusicSkipButton.Direction.previous.iconName, "backward.fill")
+        XCTAssertEqual(AppleMusicSkipButton.Direction.next.iconName, "forward.fill")
+        XCTAssertEqual(AppleMusicSkipButton.Direction.previous.nudgeOffset, -3.5)
+        XCTAssertEqual(AppleMusicSkipButton.Direction.next.nudgeOffset, 3.5)
+
+        // Test press button style initialization
+        let style = AppleMusicPressButtonStyle(pressedScale: 0.88, response: 0.28, dampingFraction: 0.62)
+        XCTAssertEqual(style.pressedScale, 0.88)
+        XCTAssertEqual(style.response, 0.28)
+        XCTAssertEqual(style.dampingFraction, 0.62)
+    }
 }
