@@ -555,4 +555,35 @@ final class AnotherMusicTests: XCTestCase {
             XCTFail("Failed to load DonationVietQR.png into NSImage")
         }
     }
+
+    @MainActor
+    func testSoftwareUpdateDelegateAllowedChannels() {
+        let delegate = SoftwareUpdateDelegate.shared
+        UserDefaults.standard.set("Beta", forKey: "softwareUpdateChannel")
+        let updater = SoftwareUpdater.shared.updater
+        XCTAssertTrue(delegate.allowedChannels(for: updater).contains("beta"))
+
+        UserDefaults.standard.set("Stable", forKey: "softwareUpdateChannel")
+        XCTAssertFalse(delegate.allowedChannels(for: updater).contains("beta"))
+
+        // Reset to Beta
+        UserDefaults.standard.set("Beta", forKey: "softwareUpdateChannel")
+    }
+
+    func testAppcastFeedFileValid() {
+        let repoRoot = URL(fileURLWithPath: #file)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appcastURL = repoRoot.appendingPathComponent("updater/appcast.xml")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: appcastURL.path), "updater/appcast.xml must exist at \(appcastURL.path)")
+        if let xml = try? String(contentsOf: appcastURL, encoding: .utf8) {
+            XCTAssertTrue(xml.contains("<rss"))
+            XCTAssertTrue(xml.contains("sparkle:edSignature"))
+            XCTAssertTrue(xml.contains("anotherMusic"))
+        } else {
+            XCTFail("Failed to read updater/appcast.xml")
+        }
+    }
 }

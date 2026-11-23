@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>anotherMusic</title>
+        <link>https://github.com/jinkun1998/another.Music/releases</link>
+        <description>anotherMusic updates</description>
+        <item>
+            <title>8.4.1-beta.6</title>
+            <pubDate>Mon, 23 Nov 2026 02:00:00 +0000</pubDate>
+            <link>https://github.com/jinkun1998/another.Music/releases</link>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:version>75</sparkle:version>
+            <sparkle:shortVersionString>8.4.1-beta.6</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<div class="markdown-heading"><h3>What's Changed in v8.4.1-beta.6</h3></div>
+<ul>
+<li><strong>Sparkle 2 Native Updater</strong>: Seamless native macOS update dialog, release notes, automatic background downloads, and one-click in-place restart.</li>
+<li><strong>Support &amp; Donate</strong>: GitHub Sponsors and VietQR modal popup matching anotherNotch.</li>
+<li><strong>Performance &amp; Battery</strong>: Resolved 99% CPU issue with detached progress reporting and cached hero elements.</li>
+<li><strong>Trackpad Gestures</strong>: 2-finger horizontal seeking and volume swipe with haptic detents.</li>
+</ul>
+]]></description>
+            <enclosure url="https://github.com/jinkun1998/another.Music/releases/download/v8.4.1-beta.6/anotherMusic-8.4.1-beta.6-macos.dmg" length="4678075" type="application/octet-stream" sparkle:edSignature="+NTjmWl4G7J1Qs81PrZ7OurBK/deKN4b9pwxBGBQJ56IUHjetqGodXeWlL7t5MXxA8pG4LeazfaFcoFbUlmhCw=="/>
+        </item>
+    </channel>
+</rss>

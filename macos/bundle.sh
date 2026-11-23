@@ -42,6 +42,18 @@ cp Resources/*.png "$APP/Contents/Resources/" 2>/dev/null || true
 cp "$BIN" "$APP/Contents/MacOS/anotherMusic"
 chmod +x "$APP/Contents/MacOS/anotherMusic"
 
+# Embed Sparkle.framework
+mkdir -p "$APP/Contents/Frameworks"
+SPARKLE_FW="$DIR/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+if [ ! -d "$SPARKLE_FW" ]; then
+    SPARKLE_FW=$(find "$DIR/.build" -name "Sparkle.framework" | head -n 1)
+fi
+if [ -d "$SPARKLE_FW" ]; then
+    echo "==> Embedding Sparkle.framework"
+    cp -R "$SPARKLE_FW" "$APP/Contents/Frameworks/"
+fi
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/anotherMusic" 2>/dev/null || true
+
 ICONSET="$DIR/build/AppIcon.iconset"
 rm -rf "$ICONSET"; mkdir -p "$ICONSET"
 for sz in 16 32 128 256; do
@@ -83,10 +95,20 @@ cat << PLIST > "$APP/Contents/Info.plist"
         <key>NSAllowsArbitraryLoads</key>
         <true/>
     </dict>
+    <key>SUFeedURL</key>
+    <string>https://raw.githubusercontent.com/jinkun1998/another.Music/macos-native/updater/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>FqZ1FB+qUIACSl4kcOPplkb3Pr4Ri7WEOGZX2L127Js=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
 </dict>
 </plist>
 PLIST
 
+if [ -d "$APP/Contents/Frameworks/Sparkle.framework" ]; then
+    codesign --force --options runtime --sign - "$APP/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate" 2>/dev/null || true
+    codesign --force --options runtime --sign - "$APP/Contents/Frameworks/Sparkle.framework" 2>/dev/null || true
+fi
 codesign --force --deep --sign - "$APP" 2>/dev/null || true
 
 echo "==> Bundle ready at: $APP"
