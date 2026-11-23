@@ -609,4 +609,58 @@ final class AnotherMusicTests: XCTestCase {
         // Reset to automix
         player.transitionMode = .automix
     }
+
+    @MainActor
+    func testHeroCarouselSwipeHapticsAndSingleCardAdvance() {
+        let monitor = HeroCarouselSwipeMonitor()
+        var nextCount = 0
+        var prevCount = 0
+        monitor.onSwipeNext = { nextCount += 1 }
+        monitor.onSwipePrev = { prevCount += 1 }
+        monitor.isEnabled = true
+
+        // 1. Initial State
+        XCTAssertEqual(nextCount, 0)
+        XCTAssertEqual(prevCount, 0)
+
+        // 2. Vertical scroll should pass through (return false) without triggering horizontal swipe
+        let verticalConsumed = monitor.processScrollWheel(dx: 0, dy: -40, phase: .changed)
+        XCTAssertFalse(verticalConsumed, "Vertical scrolling must pass through to parent feed")
+        XCTAssertEqual(nextCount, 0)
+        XCTAssertEqual(prevCount, 0)
+
+        // 3. Horizontal swipe left starting with small delta (under threshold 26)
+        let beganConsumed = monitor.processScrollWheel(dx: -15, dy: 0, phase: .began)
+        XCTAssertFalse(beganConsumed, "Delta under threshold must not trigger yet")
+
+        // 4. Continued swipe left crossing threshold -> triggers exactly once
+        let triggerConsumed = monitor.processScrollWheel(dx: -15, dy: 0, phase: .changed)
+        XCTAssertTrue(triggerConsumed, "Crossing threshold must be consumed")
+
+        // Run the main runloop briefly to flush the async dispatch
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02))
+        XCTAssertEqual(nextCount, 1, "Should trigger advanceNext exactly once")
+
+        // 5. Subsequent momentum / continuing swipe deltas in same gesture MUST be swallowed and NOT advance again
+        let momentum1 = monitor.processScrollWheel(dx: -80, dy: 0, phase: .changed)
+        let momentum2 = monitor.processScrollWheel(dx: -60, dy: 0, phase: [], momentumPhase: .changed)
+        XCTAssertTrue(momentum1, "Remaining swipe deltas must be consumed")
+        XCTAssertTrue(momentum2, "Momentum deltas must be consumed")
+
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02))
+        XCTAssertEqual(nextCount, 1, "Must strictly restrict swipe to 1 card per gesture")
+
+        // 6. Finish gesture
+        _ = monitor.processScrollWheel(dx: 0, dy: 0, phase: .ended, momentumPhase: .ended)
+
+        // 7. New gesture swipe right -> triggers advancePrev exactly once
+        _ = monitor.processScrollWheel(dx: 30, dy: 0, phase: .began)
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02))
+        XCTAssertEqual(prevCount, 1, "New gesture should trigger advancePrev")
+
+        // 8. Flinging momentum in second gesture should not double-advance
+        _ = monitor.processScrollWheel(dx: 50, dy: 0, phase: .changed)
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02))
+        XCTAssertEqual(prevCount, 1, "Must not double-advance in same gesture")
+    }
 }

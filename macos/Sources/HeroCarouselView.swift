@@ -834,6 +834,137 @@ public struct HeroCardView: View {
     }
 }
 
+// MARK: - Hero Carousel Swipe Monitor (1-card advance with Trackpad Haptics)
+public final class HeroCarouselSwipeMonitor: ObservableObject {
+    private var monitor: Any?
+    private var accumulatedDeltaX: CGFloat = 0
+    private var hasTriggeredInGesture: Bool = false
+    private var resetTask: Task<Void, Never>?
+
+    public var isEnabled: Bool = false
+    public var onSwipeNext: (() -> Void)?
+    public var onSwipePrev: (() -> Void)?
+
+    public init() {}
+
+    public func start() {
+        guard monitor == nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            guard let self, self.isEnabled else { return event }
+            guard let window = event.window, window == NSApp.keyWindow || window.isKeyWindow else {
+                return event
+            }
+
+            let isPrecise = event.hasPreciseScrollingDeltas
+            let dx = isPrecise ? event.scrollingDeltaX : (event.deltaX * 12.0)
+            let dy = isPrecise ? event.scrollingDeltaY : (event.deltaY * 12.0)
+
+            let consumed = self.processScrollWheel(
+                dx: dx,
+                dy: dy,
+                phase: event.phase,
+                momentumPhase: event.momentumPhase,
+                isPrecise: isPrecise,
+                isDirectionInverted: event.isDirectionInvertedFromDevice
+            )
+
+            return consumed ? nil : event
+        }
+    }
+
+    @discardableResult
+    public func processScrollWheel(
+        dx: CGFloat,
+        dy: CGFloat,
+        phase: NSEvent.Phase = [],
+        momentumPhase: NSEvent.Phase = [],
+        isPrecise: Bool = true,
+        isDirectionInverted: Bool = true
+    ) -> Bool {
+        guard isEnabled else { return false }
+
+        var effectiveDx = dx
+        // When natural scrolling is off on trackpads, invert so physical gesture matches visual direction
+        if isPrecise && !isDirectionInverted {
+            effectiveDx = -effectiveDx
+        }
+
+        let absX = abs(effectiveDx)
+        let absY = abs(dy)
+
+        // Let vertical page scrolling pass through unimpeded to parent feed
+        if absY > absX * 1.15 {
+            return false
+        }
+
+        // Ignore resting touch noise
+        if absX < 0.5 && absY < 0.5 {
+            return false
+        }
+
+        if phase == .began {
+            accumulatedDeltaX = 0
+            hasTriggeredInGesture = false
+        }
+
+        accumulatedDeltaX += effectiveDx
+
+        resetTask?.cancel()
+        resetTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 320_000_000)
+            guard let self, !Task.isCancelled else { return }
+            self.hasTriggeredInGesture = false
+            self.accumulatedDeltaX = 0
+        }
+
+        if (phase == .ended || phase == .cancelled) &&
+           (momentumPhase == .ended || momentumPhase == []) {
+            hasTriggeredInGesture = false
+            accumulatedDeltaX = 0
+        }
+
+        let swipeThreshold: CGFloat = 26.0
+
+        if !hasTriggeredInGesture {
+            if accumulatedDeltaX < -swipeThreshold {
+                // Swiped left -> advance strictly 1 card forward
+                hasTriggeredInGesture = true
+                DispatchQueue.main.async { [weak self] in
+                    self?.onSwipeNext?()
+                }
+                return true
+            } else if accumulatedDeltaX > swipeThreshold {
+                // Swiped right -> advance strictly 1 card backward
+                hasTriggeredInGesture = true
+                DispatchQueue.main.async { [weak self] in
+                    self?.onSwipePrev?()
+                }
+                return true
+            }
+        } else {
+            // Already advanced 1 card for this swipe gesture; consume all remaining momentum and deltas
+            return true
+        }
+
+        return false
+    }
+
+    public func stop() {
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+            self.monitor = nil
+        }
+        resetTask?.cancel()
+        resetTask = nil
+    }
+
+    deinit {
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+        }
+    }
+}
+
 // MARK: - Hero Carousel Main Container
 public struct HeroCarouselView: View {
     public let cards: [HeroCardModel]
@@ -850,6 +981,7 @@ public struct HeroCarouselView: View {
     @State private var hasGachaRolled: Bool = false
     @State private var activePageIndex: Int?
     @State private var isCarouselHovered: Bool = false
+    @StateObject private var swipeMonitor = HeroCarouselSwipeMonitor()
 
     private let loopMultiplier = 20
 
@@ -922,12 +1054,13 @@ public struct HeroCarouselView: View {
                                 }
                                 .scrollTargetLayout()
                             }
-                            .scrollTargetBehavior(.viewAligned)
+                            .scrollDisabled(true)
                             .safeAreaPadding(.horizontal, sideInset)
                             .scrollPosition(id: $activePageIndex, anchor: .center)
                             .simultaneousGesture(
                                 DragGesture(minimumDistance: 25)
                                     .onEnded { value in
+                                        guard !isGachaRolling else { return }
                                         if value.translation.width < -40 {
                                             AppHaptics.levelChange()
                                             advanceNext(proxy: scrollProxy)
@@ -1001,6 +1134,7 @@ public struct HeroCarouselView: View {
                     .frame(width: totalW, height: containerH)
                     .onHover { hovering in
                         isCarouselHovered = hovering
+                        swipeMonitor.isEnabled = hovering && cards.count > 1
                     }
                     .onAppear {
                         let target = activePageIndex ?? initialPage
@@ -1008,6 +1142,22 @@ public struct HeroCarouselView: View {
                         DispatchQueue.main.async {
                             scrollProxy.scrollTo(target, anchor: .center)
                         }
+                        swipeMonitor.onSwipeNext = {
+                            guard !isGachaRolling else { return }
+                            AppHaptics.levelChange()
+                            advanceNext(proxy: scrollProxy)
+                        }
+                        swipeMonitor.onSwipePrev = {
+                            guard !isGachaRolling else { return }
+                            AppHaptics.levelChange()
+                            advancePrev(proxy: scrollProxy)
+                        }
+                        swipeMonitor.start()
+                        swipeMonitor.isEnabled = isCarouselHovered && cards.count > 1
+                    }
+                    .onDisappear {
+                        swipeMonitor.stop()
+                        swipeMonitor.isEnabled = false
                     }
                     .onChange(of: totalW) { _, _ in
                         let target = activePageIndex ?? initialPage
@@ -1090,7 +1240,7 @@ public struct HeroCarouselView: View {
     }
 
     private func advanceNext(proxy: ScrollViewProxy) {
-        guard !cards.isEmpty else { return }
+        guard !cards.isEmpty, !isGachaRolling else { return }
         let current = activePageIndex ?? initialPage
         let next = current + 1
         withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
@@ -1100,7 +1250,7 @@ public struct HeroCarouselView: View {
     }
 
     private func advancePrev(proxy: ScrollViewProxy) {
-        guard !cards.isEmpty else { return }
+        guard !cards.isEmpty, !isGachaRolling else { return }
         let current = activePageIndex ?? initialPage
         let prev = current - 1
         withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
