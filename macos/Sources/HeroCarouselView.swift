@@ -203,6 +203,8 @@ public struct GachaDieView: View {
 
 // MARK: - Gacha State (Hoisted to survive infinite loop swiping)
 public final class GachaState: ObservableObject {
+    public static let shared = GachaState()
+
     @Published public var activeCandidates: [SongItem] = []
     @Published public var reelPosition: Double = 0
     @Published public var isRolling: Bool = false
@@ -442,13 +444,8 @@ public struct GachaCardView: View {
         let count = pool.count
 
         ZStack {
-            let centerReel = state.reelPosition
-            let baseIndex = Int(floor(centerReel))
-            ForEach(-2...3, id: \.self) { offset in
-                let slotIndex = baseIndex + offset
-                let nominalIndex = ((slotIndex % count) + count) % count
-                let song = pool[nominalIndex]
-                let d = reelDistance(index: nominalIndex, reel: centerReel, count: count)
+            ForEach(Array(pool.enumerated()), id: \.element.id) { index, song in
+                let d = reelDistance(index: index, reel: state.reelPosition, count: count)
                 if abs(d) <= 2.6 {
                     ReelCoverSlot(
                         song: song,
@@ -848,7 +845,7 @@ public struct HeroCarouselView: View {
     public let onNavigateCollection: (SongItem) -> Void
 
     // Decoupled from @StateObject so 60 Hz reel updates do not re-render HeroCarouselView with its 140 cards
-    private let gachaState = GachaState()
+    private var gachaState: GachaState { GachaState.shared }
     @State private var isGachaRolling: Bool = false
     @State private var hasGachaRolled: Bool = false
     @State private var activePageIndex: Int?
