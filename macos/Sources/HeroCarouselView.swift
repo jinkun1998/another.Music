@@ -427,11 +427,10 @@ public struct GachaCardView: View {
             Image(systemName: "arrowtriangle.right.fill")
                 .font(.system(size: 26, weight: .bold))
                 .foregroundColor(pointerColor)
-                .shadow(color: pointerColor.opacity(0.5), radius: 8, x: 0, y: 0)
+                .shadow(color: pointerColor.opacity(0.5), radius: 6, x: 0, y: 0)
                 .offset(x: -state.pointerKick * 7.0)
                 .rotationEffect(.degrees(-Double(state.pointerKick * 8.0)))
                 .scaleEffect(state.landPopScale > 1.0 ? 1.20 : 1.0)
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: state.pointerKick)
                 .animation(.spring(response: 0.4, dampingFraction: 0.6), value: state.landPopScale)
                 .offset(x: -125, y: 0)
         }
@@ -443,53 +442,24 @@ public struct GachaCardView: View {
         let count = pool.count
 
         ZStack {
-            ForEach(Array(pool.enumerated()), id: \.element.id) { index, song in
-                let d = reelDistance(index: index, reel: state.reelPosition, count: count)
+            let centerReel = state.reelPosition
+            let baseIndex = Int(floor(centerReel))
+            ForEach(-2...3, id: \.self) { offset in
+                let slotIndex = baseIndex + offset
+                let nominalIndex = ((slotIndex % count) + count) % count
+                let song = pool[nominalIndex]
+                let d = reelDistance(index: nominalIndex, reel: centerReel, count: count)
                 if abs(d) <= 2.6 {
-                    let near = max(0, 1.0 - abs(d))
-                    let scale = (170.0 + (215.0 - 170.0) * near) / 215.0
-                    let isCenter = near > 0.65
-                    let pop = isCenter ? state.landPopScale : 1.0
-                    let slotY = d * 185.0
-
-                    CachedAsyncImage(
-                        urlString: song.thumbnail?.ytResize(width: 500, height: 500),
-                        content: { img in
-                            img.resizable()
-                                .aspectRatio(contentMode: .fill)
-                        },
-                        placeholder: {
-                            Color.gray.opacity(0.3)
+                    ReelCoverSlot(
+                        song: song,
+                        distance: d,
+                        landPopScale: state.landPopScale,
+                        onRoll: {
+                            if !state.isRolling {
+                                startRoll()
+                            }
                         }
                     )
-                    .frame(width: 210, height: 210)
-                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .stroke(
-                                isCenter ? Color.white.opacity(0.65) : Color.white.opacity(0.12),
-                                lineWidth: isCenter ? 2.5 : 1.0
-                            )
-                    )
-                    .shadow(
-                        color: isCenter ? Color.black.opacity(0.65) : Color.black.opacity(0.35),
-                        radius: isCenter ? 18 : 8,
-                        x: 0,
-                        y: isCenter ? 8 : 4
-                    )
-                    .scaleEffect(scale * pop)
-                    .rotation3DEffect(
-                        .degrees(-Double(d * 18.0)),
-                        axis: (x: 1.0, y: 0.0, z: 0.0),
-                        perspective: 0.6
-                    )
-                    .offset(x: 28, y: slotY)
-                    .opacity(max(0, min(1.0, 2.5 - abs(d))))
-                    .onTapGesture {
-                        if !state.isRolling {
-                            startRoll()
-                        }
-                    }
                 }
             }
         }
@@ -543,15 +513,16 @@ public struct GachaCardView: View {
                 lastCrossedIndex = currentInt
                 GachaSounds.shared.tick()
                 self.state.pointerKick = 1.0
-                withAnimation(.spring(response: 0.15, dampingFraction: 0.5)) {
-                    self.state.pointerKick = 0.0
-                }
+            } else if self.state.pointerKick > 0.01 {
+                // Direct frame decay avoids scheduling competing withAnimation spring loops at 60 Hz
+                self.state.pointerKick = max(0.0, self.state.pointerKick - 0.12)
             }
 
             if progress >= 1.0 {
                 t.invalidate()
                 self.state.rollTimer = nil
                 self.state.reelPosition = targetReel
+                self.state.pointerKick = 0.0
                 self.state.isRolling = false
                 self.onRollingStateChanged?(false)
 
@@ -607,6 +578,57 @@ public struct GachaCardView: View {
             u -= x / d
         }
         return sampleCurveY(max(0, min(1.0, u)))
+    }
+}
+
+/// Dedicated reel cover slot component with lightweight rendering footprint.
+private struct ReelCoverSlot: View {
+    let song: SongItem
+    let distance: Double
+    let landPopScale: CGFloat
+    let onRoll: () -> Void
+
+    var body: some View {
+        let near = max(0, 1.0 - abs(distance))
+        let scale = (170.0 + (215.0 - 170.0) * near) / 215.0
+        let isCenter = near > 0.65
+        let pop = isCenter ? landPopScale : 1.0
+        let slotY = distance * 185.0
+
+        CachedAsyncImage(
+            urlString: song.thumbnail?.ytResize(width: 500, height: 500),
+            content: { img in
+                img.resizable()
+                    .aspectRatio(contentMode: .fill)
+            },
+            placeholder: {
+                Color.gray.opacity(0.3)
+            }
+        )
+        .frame(width: 210, height: 210)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(
+                    isCenter ? Color.white.opacity(0.65) : Color.white.opacity(0.12),
+                    lineWidth: isCenter ? 2.5 : 1.0
+                )
+        )
+        .shadow(
+            color: Color.black.opacity(isCenter ? 0.45 : 0.20),
+            radius: isCenter ? 10 : 4,
+            x: 0,
+            y: isCenter ? 6 : 2
+        )
+        .scaleEffect(scale * pop)
+        .rotation3DEffect(
+            .degrees(-Double(distance * 18.0)),
+            axis: (x: 1.0, y: 0.0, z: 0.0),
+            perspective: 0.6
+        )
+        .offset(x: 28, y: slotY)
+        .opacity(max(0, min(1.0, 2.5 - abs(distance))))
+        .onTapGesture(perform: onRoll)
     }
 }
 
@@ -825,7 +847,10 @@ public struct HeroCarouselView: View {
     public let onTogglePauseResume: () -> Void
     public let onNavigateCollection: (SongItem) -> Void
 
-    @StateObject private var gachaState = GachaState()
+    // Decoupled from @StateObject so 60 Hz reel updates do not re-render HeroCarouselView with its 140 cards
+    private let gachaState = GachaState()
+    @State private var isGachaRolling: Bool = false
+    @State private var hasGachaRolled: Bool = false
     @State private var activePageIndex: Int?
     @State private var isCarouselHovered: Bool = false
 
@@ -1010,11 +1035,11 @@ public struct HeroCarouselView: View {
                             activePageIndex = centerBase + cardIdx
                         }
                     }
-                    .task(id: "\(isAudioPlaying)_\(gachaState.isRolling)_\(isCarouselHovered)_\(gachaState.hasRolled)_\(activePageIndex ?? 0)") {
+                    .task(id: "\(isAudioPlaying)_\(isGachaRolling)_\(isCarouselHovered)_\(hasGachaRolled)_\(activePageIndex ?? 0)") {
                         // Android Mochy rule: do not auto-advance if audio is playing, gacha is rolling, user is hovering, or on gacha card after rolling
-                        guard !isAudioPlaying, !gachaState.isRolling, !isCarouselHovered, cards.count > 1 else { return }
+                        guard !isAudioPlaying, !isGachaRolling, !isCarouselHovered, cards.count > 1 else { return }
                         let onGacha = (currentIndex < cards.count) && cards[currentIndex].kind == .gacha
-                        if onGacha && gachaState.hasRolled { return }
+                        if onGacha && hasGachaRolled { return }
 
                         do {
                             try await Task.sleep(nanoseconds: 5_500_000_000)
@@ -1042,7 +1067,10 @@ public struct HeroCarouselView: View {
                     onPlaySong(wonSong, pool)
                 },
                 onRollingStateChanged: { rolling in
-                    // Handled inside gachaState
+                    isGachaRolling = rolling
+                    if rolling {
+                        hasGachaRolled = true
+                    }
                 }
             )
         } else {

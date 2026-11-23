@@ -25,7 +25,7 @@ public enum RepeatMode: String, CaseIterable, Sendable {
     case one
 }
 
-/// Dedicated lightweight progress tracker to decouple high-frequency 4 Hz scrub updates
+/// Dedicated lightweight progress tracker to decouple high-frequency scrub and automix updates
 /// from AudioPlayerService, preventing whole-app view invalidations.
 @MainActor
 public final class PlaybackProgressTracker: ObservableObject {
@@ -33,11 +33,30 @@ public final class PlaybackProgressTracker: ObservableObject {
 
     @Published public var positionSec: Double = 0.0
     @Published public var progress: Double = 0.0
+    @Published public var transitionProgress: Double = 0.0
+
+    /// Apple Music-style UI crossfade centered at <auto mix seconds> / 2
+    public var uiTransitionProgress: Double {
+        let p = min(max(transitionProgress, 0.0), 1.0)
+        return p * p * (3.0 - 2.0 * p)
+    }
 
     public func update(positionSec: Double, progress: Double) {
         if abs(self.positionSec - positionSec) > 0.02 || abs(self.progress - progress) > 0.0005 {
             self.positionSec = positionSec
             self.progress = progress
+        }
+    }
+
+    public func updateTransition(_ frac: Double) {
+        if abs(self.transitionProgress - frac) > 0.005 {
+            self.transitionProgress = frac
+        }
+    }
+
+    public func resetTransition() {
+        if self.transitionProgress != 0.0 {
+            self.transitionProgress = 0.0
         }
     }
 }
@@ -96,15 +115,14 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         }
     }
     @Published public private(set) var isTransitioning: Bool = false
-    @Published public private(set) var transitionProgress: Double = 0.0
+    public private(set) var transitionProgress: Double = 0.0
     @Published public private(set) var incomingTrack: SongItem? = nil
     private var transitionStartDate: Date?
 
     /// Apple Music-style UI crossfade centered at <auto mix seconds> / 2
     public var uiTransitionProgress: Double {
         guard isTransitioning else { return 0.0 }
-        let p = min(max(transitionProgress, 0.0), 1.0)
-        return p * p * (3.0 - 2.0 * p)
+        return PlaybackProgressTracker.shared.uiTransitionProgress
     }
 
     // Dual-Deck Crossmix Engine (Phase 2 AutoMix)
@@ -676,6 +694,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         preloadedTrack = nil
         isTransitioning = false
         transitionProgress = 0.0
+        PlaybackProgressTracker.shared.resetTransition()
         incomingTrack = nil
         player?.rate = 1.0
         player?.volume = self.volume
@@ -721,6 +740,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         guard !isTransitioning, let sec = secondaryPlayer else { return }
         isTransitioning = true
         transitionProgress = 0.0
+        PlaybackProgressTracker.shared.resetTransition()
         incomingTrack = pre.song
         let start = Date()
         transitionStartDate = start
@@ -732,7 +752,8 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         crossmixDurationTarget = duration
         crossmixPreloaded = pre
         // ponytail: selector-driven runloop timer executes directly on MainActor without closure isolation hops
-        let timer = Timer(timeInterval: 0.025, target: self, selector: #selector(onCrossmixTick), userInfo: nil, repeats: true)
+        // 30 Hz timer (0.033s) provides fluid volume fading and UI transitions while reducing timer fires by 25%
+        let timer = Timer(timeInterval: 0.033, target: self, selector: #selector(onCrossmixTick), userInfo: nil, repeats: true)
         RunLoop.main.add(timer, forMode: .common)
         self.crossmixTimer = timer
     }
@@ -748,6 +769,11 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         let elapsed = Date().timeIntervalSince(start)
         let frac = min(max(elapsed / crossmixDurationTarget, 0.0), 1.0)
         self.transitionProgress = frac
+
+        // Only emit UI progress updates when the app window is visible, keeping CPU at ~0% in background
+        if AppDelegate.shared.isWindowVisible {
+            PlaybackProgressTracker.shared.updateTransition(frac)
+        }
 
         let outVol: Float
         let inVol: Float
@@ -790,6 +816,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         self.secondaryPlayer = nil
         self.isTransitioning = false
         self.transitionProgress = 0.0
+        PlaybackProgressTracker.shared.resetTransition()
         self.incomingTrack = nil
         self.preloadedTrack = nil
 

@@ -31,7 +31,7 @@ import AppKit
             CrossfadingBackdrop(
                 currentThumbnail: activeTrack.thumbnail,
                 incomingThumbnail: player.isTransitioning ? player.incomingTrack?.thumbnail : nil,
-                transitionProgress: player.uiTransitionProgress
+                transitionProgress: progressTracker.uiTransitionProgress
             )
 
             VStack(spacing: 0) {
@@ -152,7 +152,7 @@ import AppKit
                                     progress: progressTracker.progress,
                                     incomingThumbnail: player.isTransitioning ? player.incomingTrack?.thumbnail : nil,
                                     incomingTitle: player.isTransitioning ? player.incomingTrack?.title : nil,
-                                    transitionProgress: player.uiTransitionProgress,
+                                    transitionProgress: progressTracker.uiTransitionProgress,
                                     onSeek: { player.seek(to: $0) }
                                 )
                                 .frame(width: deckW, height: deckW)
@@ -184,7 +184,7 @@ import AppKit
                                         .clipShape(RoundedRectangle(cornerRadius: 24))
                                         .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.15), lineWidth: 1))
                                         .shadow(color: .black.opacity(0.4), radius: 25, y: 12)
-                                        .opacity(player.uiTransitionProgress)
+                                        .opacity(progressTracker.uiTransitionProgress)
                                     }
                                 }
                                 .scaleEffect(player.isPlaying ? 1.0 : 0.94)
@@ -209,7 +209,7 @@ import AppKit
                                         .foregroundColor(.white.opacity(0.7))
                                         .lineLimit(1)
                                 }
-                                .opacity(player.isTransitioning ? (1.0 - player.uiTransitionProgress) : 1.0)
+                                .opacity(player.isTransitioning ? (1.0 - progressTracker.uiTransitionProgress) : 1.0)
 
                                 if let incoming = player.incomingTrack {
                                     VStack(alignment: .leading, spacing: 3) {
@@ -222,13 +222,13 @@ import AppKit
                                             .foregroundColor(.white.opacity(0.7))
                                             .lineLimit(1)
                                     }
-                                    .opacity(player.uiTransitionProgress)
+                                    .opacity(progressTracker.uiTransitionProgress)
                                 }
                             }
 
                             Spacer()
 
-                            let targetTrack = (player.isTransitioning && player.uiTransitionProgress >= 0.5) ? (player.incomingTrack ?? activeTrack) : activeTrack
+                            let targetTrack = (player.isTransitioning && progressTracker.uiTransitionProgress >= 0.5) ? (player.incomingTrack ?? activeTrack) : activeTrack
                             Image(systemName: library.isLiked(targetTrack) ? "heart.fill" : "heart")
                                 .font(.system(size: 20))
                                 .foregroundColor(library.isLiked(targetTrack) ? .white : .white.opacity(0.7))
@@ -329,7 +329,7 @@ import AppKit
                                 durationMs: Int64(player.durationSec * 1000),
                                 onSeek: { player.seek(to: $0) }
                             )
-                            .opacity(player.isTransitioning ? max(0.18, 1.0 - player.uiTransitionProgress) : 1.0)
+                            .opacity(player.isTransitioning ? max(0.18, 1.0 - progressTracker.uiTransitionProgress) : 1.0)
                             .background(Color.white.opacity(0.04))
                             .clipShape(RoundedRectangle(cornerRadius: 24))
                             .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.08), lineWidth: 1))

@@ -25,61 +25,9 @@ import SwiftUI
             // Left: Integrated Mini Player (animated expand/collapse)
             if let track = currentTrack {
                 HStack(spacing: 12) {
-                    HStack(spacing: 10) {
-                        ZStack {
-                            if let thumb = track.thumbnail {
-                                CachedAsyncImage(urlString: thumb) { img in
-                                    img.resizable().aspectRatio(contentMode: .fill)
-                                } placeholder: {
-                                    Color.gray.opacity(0.3)
-                                }
-                                .opacity(transitionProgress > 0 ? (1.0 - transitionProgress) : 1.0)
-                            }
-
-                            if transitionProgress > 0, let incThumb = incomingTrack?.thumbnail {
-                                CachedAsyncImage(urlString: incThumb) { img in
-                                    img.resizable().aspectRatio(contentMode: .fill)
-                                } placeholder: {
-                                    Color.clear
-                                }
-                                .opacity(transitionProgress)
-                            }
-                        }
-                        .frame(width: 44, height: 44)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
-
-                        ZStack(alignment: .leading) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(track.title)
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .lineLimit(1)
-                                Text(track.artist)
-                                    .font(.system(size: 11))
-                                    .foregroundColor(.white.opacity(0.65))
-                                    .lineLimit(1)
-                            }
-                            .opacity(transitionProgress > 0 ? (1.0 - transitionProgress) : 1.0)
-
-                            if let incoming = incomingTrack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(incoming.title)
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundColor(.white)
-                                        .lineLimit(1)
-                                    Text(incoming.artist)
-                                        .font(.system(size: 11))
-                                        .foregroundColor(.white.opacity(0.65))
-                                        .lineLimit(1)
-                                }
-                                .opacity(transitionProgress)
-                            }
-                        }
-                        .frame(minWidth: 110, maxWidth: 180, alignment: .leading)
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture(perform: onExpandPlayer)
+                    MiniPlayerTrackInfo(track: track, incomingTrack: incomingTrack)
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: onExpandPlayer)
 
                     // Transport controls
                     HStack(spacing: 4) {
@@ -170,6 +118,71 @@ import SwiftUI
     @Namespace private var navNamespace
 }
 
+/// Isolated track info component so automix crossfades only redraw this subview,
+/// without re-rendering FloatingWideBar or the main app view hierarchy.
+private struct MiniPlayerTrackInfo: View {
+    let track: SongItem
+    let incomingTrack: SongItem?
+    @ObservedObject private var progressTracker = PlaybackProgressTracker.shared
+
+    var body: some View {
+        let tp = progressTracker.uiTransitionProgress
+        HStack(spacing: 10) {
+            ZStack {
+                if let thumb = track.thumbnail {
+                    CachedAsyncImage(urlString: thumb) { img in
+                        img.resizable().aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Color.gray.opacity(0.3)
+                    }
+                    .opacity(tp > 0 ? (1.0 - tp) : 1.0)
+                }
+
+                if tp > 0, let incThumb = incomingTrack?.thumbnail {
+                    CachedAsyncImage(urlString: incThumb) { img in
+                        img.resizable().aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Color.clear
+                    }
+                    .opacity(tp)
+                }
+            }
+            .frame(width: 44, height: 44)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
+
+            ZStack(alignment: .leading) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(track.title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    Text(track.artist)
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.65))
+                        .lineLimit(1)
+                }
+                .opacity(tp > 0 ? (1.0 - tp) : 1.0)
+
+                if let incoming = incomingTrack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(incoming.title)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                        Text(incoming.artist)
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.65))
+                            .lineLimit(1)
+                    }
+                    .opacity(tp)
+                }
+            }
+            .frame(minWidth: 110, maxWidth: 180, alignment: .leading)
+        }
+    }
+}
+
 /// Isolated progress bar component so progress ticks only redraw this tiny capsule,
 /// without re-rendering FloatingWideBar or the main app view hierarchy.
 private struct MiniPlayerProgressBar: View {
@@ -180,7 +193,7 @@ private struct MiniPlayerProgressBar: View {
     var body: some View {
         GeometryReader { geo in
             let fillRatio = player.isTransitioning
-                ? ((1.0 - player.uiTransitionProgress) * progressTracker.progress)
+                ? ((1.0 - progressTracker.uiTransitionProgress) * progressTracker.progress)
                 : progressTracker.progress
             Capsule()
                 .fill(

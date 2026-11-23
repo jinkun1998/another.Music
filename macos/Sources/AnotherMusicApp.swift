@@ -221,7 +221,6 @@ extension Notification.Name { static let gotoSearch = Notification.Name("gotoSea
                     selectedTab: $selectedTab,
                     currentTrack: player.currentTrack,
                     incomingTrack: player.incomingTrack,
-                    transitionProgress: player.uiTransitionProgress,
                     isPlaying: player.isPlaying,
                     onTogglePlay: { player.togglePlayPause() },
                     onNext: { player.next() },
