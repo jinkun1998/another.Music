@@ -5,6 +5,25 @@
         <link>https://github.com/jinkun1998/another.Music/releases</link>
         <description>anotherMusic updates</description>
         <item>
+            <title>8.4.1</title>
+            <pubDate>Mon, 23 Nov 2026 10:00:00 +0000</pubDate>
+            <link>https://github.com/jinkun1998/another.Music/releases</link>
+            <sparkle:version>75</sparkle:version>
+            <sparkle:shortVersionString>8.4.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<div class="markdown-heading"><h3>What's Changed in v8.4.1</h3></div>
+<ul>
+<li><strong>anotherNotch Family Integration</strong>: Native two-way IPC interface and URL scheme (<code>anothermusic://</code>) with full playback controls, like/favorite toggling, notch volume sync, and AutoMix/Crossfade cycling.</li>
+<li><strong>Hero Carousel Trackpad Haptics</strong>: Tactile haptic feedback on trackpad horizontal swipes with strict 1-card advance restriction.</li>
+<li><strong>Gacha &amp; Random Play</strong>: Persistent winning track landing, seamless slot reel animations, and candidate preservation.</li>
+<li><strong>Sparkle 2 Native Updater</strong>: Seamless native macOS update dialog, release notes, automatic background downloads, and one-click in-place restart.</li>
+<li><strong>Support &amp; Donate</strong>: GitHub Sponsors and VietQR modal popup matching anotherNotch.</li>
+<li><strong>Performance &amp; Battery</strong>: Resolved high CPU usage with isolated playback progress reporting and detached background animations.</li>
+</ul>
+]]></description>
+            <enclosure url="https://github.com/jinkun1998/another.Music/releases/download/v8.4.1/anotherMusic-8.4.1-macos.dmg" length="4702709" type="application/octet-stream" sparkle:edSignature="eSm4Gy2GO7piJii2Eo3B7jZfXDjNKOZ9vj+3ggn8eCUMWiSqdKMW9SWD2Pcz5nYnx1CiJLw2awqQupD96T6uBA=="/>
+        </item>
+        <item>
             <title>8.4.1-beta.6</title>
             <pubDate>Mon, 23 Nov 2026 02:00:00 +0000</pubDate>
             <link>https://github.com/jinkun1998/another.Music/releases</link>
