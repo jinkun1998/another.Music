@@ -102,6 +102,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
             if transitionMode == .off && isTransitioning {
                 cancelCrossmix()
             }
+            AnotherMusicIPCService.shared.broadcastState()
         }
     }
 
@@ -1065,6 +1066,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
             self.player?.volume = clamped
             self.secondaryPlayer?.volume = clamped
         }
+        AnotherMusicIPCService.shared.broadcastState()
     }
 
     public func next(autoAdvance: Bool = false) {

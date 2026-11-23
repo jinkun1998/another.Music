@@ -93,6 +93,7 @@ public final class LibraryStore: ObservableObject {
             likedSongs.insert(song, at: 0)
         }
         save()
+        AnotherMusicIPCService.shared.broadcastState()
     }
 
     public func clearHistory() {

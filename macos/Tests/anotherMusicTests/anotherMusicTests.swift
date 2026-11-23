@@ -586,4 +586,27 @@ final class AnotherMusicTests: XCTestCase {
             XCTFail("Failed to read updater/appcast.xml")
         }
     }
+
+    @MainActor
+    func testAnotherMusicIPCCommandAndStateSync() {
+        let ipc = AnotherMusicIPCService.shared
+        ipc.start()
+
+        let player = AudioPlayerService.shared
+        player.setVolume(0.75)
+        XCTAssertEqual(player.volume, 0.75, accuracy: 0.01)
+
+        // Test URL Scheme parsing
+        ipc.handleURL(URL(string: "anothermusic://automix?mode=crossfade")!)
+        XCTAssertEqual(player.transitionMode, .crossfade)
+
+        ipc.handleURL(URL(string: "anothermusic://automix?mode=automix")!)
+        XCTAssertEqual(player.transitionMode, .automix)
+
+        ipc.handleURL(URL(string: "anothermusic://automix?mode=off")!)
+        XCTAssertEqual(player.transitionMode, .off)
+
+        // Reset to automix
+        player.transitionMode = .automix
+    }
 }

@@ -95,6 +95,17 @@ cat << PLIST > "$APP/Contents/Info.plist"
         <key>NSAllowsArbitraryLoads</key>
         <true/>
     </dict>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.jinkun1998.anothermusic</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>anothermusic</string>
+            </array>
+        </dict>
+    </array>
     <key>SUFeedURL</key>
     <string>https://raw.githubusercontent.com/jinkun1998/another.Music/macos-native/updater/appcast.xml</string>
     <key>SUPublicEDKey</key>

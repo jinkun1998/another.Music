@@ -31,6 +31,12 @@ import AppKit
                     AppDelegate.shared.configureMainWindow(window)
                 }
             )
+            .onAppear {
+                AnotherMusicIPCService.shared.start()
+            }
+            .onOpenURL { url in
+                AnotherMusicIPCService.shared.handleURL(url)
+            }
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
