@@ -301,6 +301,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         isTerminating = true
     }
 
+    var isWindowVisible: Bool {
+        guard let window = mainWindow else { return false }
+        return window.isVisible && !window.isMiniaturized && window.occlusionState.contains(.visible)
+    }
+
     func configureMainWindow(_ window: NSWindow) {
         self.mainWindow = window
         window.delegate = self
@@ -339,6 +344,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
+            AudioPlayerService.shared.syncProgressImmediately()
             return
         }
 
@@ -349,6 +355,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
             candidate.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
+            AudioPlayerService.shared.syncProgressImmediately()
             return
         }
 

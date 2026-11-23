@@ -25,9 +25,30 @@ public enum RepeatMode: String, CaseIterable, Sendable {
     case one
 }
 
+/// Dedicated lightweight progress tracker to decouple high-frequency 4 Hz scrub updates
+/// from AudioPlayerService, preventing whole-app view invalidations.
+@MainActor
+public final class PlaybackProgressTracker: ObservableObject {
+    public static let shared = PlaybackProgressTracker()
+
+    @Published public var positionSec: Double = 0.0
+    @Published public var progress: Double = 0.0
+
+    public func update(positionSec: Double, progress: Double) {
+        if abs(self.positionSec - positionSec) > 0.02 || abs(self.progress - progress) > 0.0005 {
+            self.positionSec = positionSec
+            self.progress = progress
+        }
+    }
+}
+
 @MainActor
 public final class AudioPlayerService: NSObject, ObservableObject {
     public static let shared = AudioPlayerService()
+
+    public func syncProgressImmediately() {
+        PlaybackProgressTracker.shared.update(positionSec: self.positionSec, progress: self.progress)
+    }
 
     private var player: AVPlayer?
     private var timeObserverToken: Any?
@@ -41,8 +62,8 @@ public final class AudioPlayerService: NSObject, ObservableObject {
 
     @Published public var currentTrack: SongItem?
     @Published public var isPlaying: Bool = false
-    @Published public var progress: Double = 0.0
-    @Published public var positionSec: Double = 0.0
+    public private(set) var progress: Double = 0.0
+    public private(set) var positionSec: Double = 0.0
     @Published public var durationSec: Double = 0.0
     @Published public var volume: Float = 0.8
     @Published public var queue: [SongItem] = []
@@ -203,6 +224,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         self.positionSec = initialSec
         self.durationSec = Double(song.duration ?? 0)
         self.progress = self.durationSec > 0 ? (initialSec / self.durationSec) : 0
+        syncProgressImmediately()
         self.isPlaying = false
         self.activeListenedSec = 0.0
         self.hasLoggedPlayForCurrentTrack = false
@@ -260,6 +282,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         self.positionSec = startSec
         self.durationSec = Double(song.duration ?? 0)
         self.progress = self.durationSec > 0 ? min(startSec / self.durationSec, 1.0) : 0
+        syncProgressImmediately()
         self.activeListenedSec = 0.0
         self.hasLoggedPlayForCurrentTrack = false
         self.lastPlaybackTickDate = Date()
@@ -414,6 +437,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
             positionSec = 0
             durationSec = 0
             progress = 0
+            syncProgressImmediately()
             updateNowPlaying()
             return
         }
@@ -488,8 +512,13 @@ public final class AudioPlayerService: NSObject, ObservableObject {
                     self.lastPlaybackTickDate = now
 
                     if self.durationSec > 0 {
-                        self.positionSec = min(current, self.durationSec)
-                        self.progress = min(max(current / self.durationSec, 0.0), 1.0)
+                        let pos = min(current, self.durationSec)
+                        let prog = min(max(current / self.durationSec, 0.0), 1.0)
+                        self.positionSec = pos
+                        self.progress = prog
+                        if AppDelegate.shared?.isWindowVisible != false {
+                            PlaybackProgressTracker.shared.update(positionSec: pos, progress: prog)
+                        }
 
                         // Evaluate listening signals: completed play threshold
                         if !self.hasLoggedPlayForCurrentTrack, let cur = self.currentTrack {
@@ -531,7 +560,11 @@ public final class AudioPlayerService: NSObject, ObservableObject {
                         let dur = self.player?.currentItem?.duration.seconds ?? 0
                         if dur > 0 && dur.isFinite {
                             self.durationSec = dur
-                            self.progress = min(max(current / dur, 0.0), 1.0)
+                            let prog = min(max(current / dur, 0.0), 1.0)
+                            self.progress = prog
+                            if AppDelegate.shared?.isWindowVisible != false {
+                                PlaybackProgressTracker.shared.update(positionSec: current, progress: prog)
+                            }
                         }
                     }
                 }
@@ -788,6 +821,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         let effectivePos = (activePos.isFinite && activePos >= 0) ? activePos : overlapSec
         self.positionSec = effectivePos
         self.progress = min(effectivePos / max(pre.durSec, 1.0), 1.0)
+        syncProgressImmediately()
         self.isPlaying = true
         self.activeListenedSec = overlapSec
         self.hasLoggedPlayForCurrentTrack = false
@@ -908,6 +942,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
             player?.seek(to: cm, toleranceBefore: .zero, toleranceAfter: .zero)
             self.positionSec = anchor
             self.progress = self.durationSec > 0 ? (anchor / self.durationSec) : 0
+            syncProgressImmediately()
         }
         pauseFadeAnchorSec = nil
         player?.volume = self.volume
@@ -960,6 +995,7 @@ public final class AudioPlayerService: NSObject, ObservableObject {
         let targetSec = durationSec > 0 ? min(clamped * durationSec, max(0, durationSec - 2.0)) : 0
         self.positionSec = targetSec
         self.progress = clamped
+        syncProgressImmediately()
 
         guard let p = player else {
             // Player not yet loaded (e.g. prepared track before play); positionSec & progress remain set

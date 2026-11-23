@@ -128,7 +128,7 @@ import SwiftUI
                 }
 
                 // Turning Center Label (Artwork) with smooth deceleration coast matching real turntable platter
-                TimelineView(.animation(paused: !isPlaying && !isCoasting)) { timeline in
+                TimelineView(.animation(paused: !isPlaying && !isCoasting || !(AppDelegate.shared?.isWindowVisible ?? true))) { timeline in
                     let angle = currentAngle(at: timeline.date)
 
                     ZStack {

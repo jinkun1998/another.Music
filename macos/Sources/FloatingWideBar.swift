@@ -174,13 +174,14 @@ import SwiftUI
 /// without re-rendering FloatingWideBar or the main app view hierarchy.
 private struct MiniPlayerProgressBar: View {
     @ObservedObject private var player = AudioPlayerService.shared
+    @ObservedObject private var progressTracker = PlaybackProgressTracker.shared
     let isBarHovered: Bool
 
     var body: some View {
         GeometryReader { geo in
             let fillRatio = player.isTransitioning
-                ? ((1.0 - player.uiTransitionProgress) * player.progress)
-                : player.progress
+                ? ((1.0 - player.uiTransitionProgress) * progressTracker.progress)
+                : progressTracker.progress
             Capsule()
                 .fill(
                     LinearGradient(

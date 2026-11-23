@@ -4,6 +4,7 @@ import AppKit
 @MainActor public struct ExpandedPlayerView: View {
     let track: SongItem
     @ObservedObject var player: AudioPlayerService
+    @ObservedObject private var progressTracker = PlaybackProgressTracker.shared
     let onClose: () -> Void
 
     @ObservedObject private var library = LibraryStore.shared
@@ -148,7 +149,7 @@ import AppKit
                                     thumbnail: activeTrack.thumbnail,
                                     title: activeTrack.title,
                                     isPlaying: player.isPlaying,
-                                    progress: player.progress,
+                                    progress: progressTracker.progress,
                                     incomingThumbnail: player.isTransitioning ? player.incomingTrack?.thumbnail : nil,
                                     incomingTitle: player.isTransitioning ? player.incomingTrack?.title : nil,
                                     transitionProgress: player.uiTransitionProgress,
@@ -243,8 +244,8 @@ import AppKit
 
                         // Scrubber Slider
                         AppleMusicScrubber(
-                            progress: isSeeking ? seekProgress : player.progress,
-                            positionSec: isSeeking ? (seekProgress * player.durationSec) : player.positionSec,
+                            progress: isSeeking ? seekProgress : progressTracker.progress,
+                            positionSec: isSeeking ? (seekProgress * player.durationSec) : progressTracker.positionSec,
                             durationSec: player.durationSec,
                             isSeeking: isSeeking,
                             onSeekStart: { ratio in
@@ -260,7 +261,7 @@ import AppKit
                             }
                         )
                         .frame(width: deckW)
-                        .onChange(of: player.positionSec) { _, _ in
+                        .onChange(of: progressTracker.positionSec) { _, _ in
                             if isSeeking { isSeeking = false }
                         }
 
@@ -324,7 +325,7 @@ import AppKit
                             SyncedLyricsView(
                                 lyrics: lyrics,
                                 isLoading: isLoadingLyrics,
-                                currentTimeMs: Int64(player.positionSec * 1000),
+                                currentTimeMs: Int64(progressTracker.positionSec * 1000),
                                 durationMs: Int64(player.durationSec * 1000),
                                 onSeek: { player.seek(to: $0) }
                             )
